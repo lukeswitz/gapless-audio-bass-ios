@@ -12,6 +12,13 @@
 		7CD47ADC1DB90E0500E60060 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 7CD47ADA1DB90E0500E60060 /* Main.storyboard */; };
 		7CD47ADE1DB90E0500E60060 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7CD47ADD1DB90E0500E60060 /* Assets.xcassets */; };
 		7CD47AE11DB90E0500E60060 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 7CD47ADF1DB90E0500E60060 /* LaunchScreen.storyboard */; };
+		7CD47AEB1DB90E2300E60060 /* libbassmix.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AE91DB90E2300E60060 /* libbassmix.a */; };
+		7CD47AEC1DB90E2300E60060 /* libbass.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AEA1DB90E2300E60060 /* libbass.a */; };
+		7CD47AF01DB90E4C00E60060 /* ObjectiveBASS.m in Sources */ = {isa = PBXBuildFile; fileRef = 7CD47AEF1DB90E4C00E60060 /* ObjectiveBASS.m */; };
+		7CD47AF71DB9165000E60060 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AF61DB9165000E60060 /* AudioToolbox.framework */; };
+		7CD47AF91DB9165C00E60060 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AF81DB9165C00E60060 /* SystemConfiguration.framework */; };
+		7CD47AFB1DB9166200E60060 /* CFNetwork.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AFA1DB9166200E60060 /* CFNetwork.framework */; };
+		7CD47AFD1DB9166B00E60060 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AFC1DB9166B00E60060 /* Accelerate.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +29,18 @@
 		7CD47ADD1DB90E0500E60060 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7CD47AE01DB90E0500E60060 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		7CD47AE21DB90E0500E60060 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		7CD47AE91DB90E2300E60060 /* libbassmix.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libbassmix.a; sourceTree = "<group>"; };
+		7CD47AEA1DB90E2300E60060 /* libbass.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libbass.a; sourceTree = "<group>"; };
+		7CD47AED1DB90E4C00E60060 /* BASS Audio Test-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "BASS Audio Test-Bridging-Header.h"; sourceTree = "<group>"; };
+		7CD47AEE1DB90E4C00E60060 /* ObjectiveBASS.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ObjectiveBASS.h; sourceTree = "<group>"; };
+		7CD47AEF1DB90E4C00E60060 /* ObjectiveBASS.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ObjectiveBASS.m; sourceTree = "<group>"; };
+		7CD47AF11DB90EFA00E60060 /* bassmix.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bassmix.h; sourceTree = "<group>"; };
+		7CD47AF21DB90F0300E60060 /* bass.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bass.h; sourceTree = "<group>"; };
+		7CD47AF41DB9163D00E60060 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		7CD47AF61DB9165000E60060 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
+		7CD47AF81DB9165C00E60060 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
+		7CD47AFA1DB9166200E60060 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
+		7CD47AFC1DB9166B00E60060 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -29,6 +48,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7CD47AFD1DB9166B00E60060 /* Accelerate.framework in Frameworks */,
+				7CD47AFB1DB9166200E60060 /* CFNetwork.framework in Frameworks */,
+				7CD47AF91DB9165C00E60060 /* SystemConfiguration.framework in Frameworks */,
+				7CD47AF71DB9165000E60060 /* AudioToolbox.framework in Frameworks */,
+				7CD47AEC1DB90E2300E60060 /* libbass.a in Frameworks */,
+				7CD47AEB1DB90E2300E60060 /* libbassmix.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -40,6 +65,7 @@
 			children = (
 				7CD47AD51DB90E0500E60060 /* BASS Audio Test */,
 				7CD47AD41DB90E0500E60060 /* Products */,
+				7CD47AF31DB9163D00E60060 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -54,14 +80,41 @@
 		7CD47AD51DB90E0500E60060 /* BASS Audio Test */ = {
 			isa = PBXGroup;
 			children = (
+				7CD47AE81DB90E0F00E60060 /* BASS */,
 				7CD47AD61DB90E0500E60060 /* AppDelegate.swift */,
 				7CD47AD81DB90E0500E60060 /* ViewController.swift */,
 				7CD47ADA1DB90E0500E60060 /* Main.storyboard */,
 				7CD47ADD1DB90E0500E60060 /* Assets.xcassets */,
 				7CD47ADF1DB90E0500E60060 /* LaunchScreen.storyboard */,
 				7CD47AE21DB90E0500E60060 /* Info.plist */,
+				7CD47AEE1DB90E4C00E60060 /* ObjectiveBASS.h */,
+				7CD47AEF1DB90E4C00E60060 /* ObjectiveBASS.m */,
+				7CD47AED1DB90E4C00E60060 /* BASS Audio Test-Bridging-Header.h */,
 			);
 			path = "BASS Audio Test";
+			sourceTree = "<group>";
+		};
+		7CD47AE81DB90E0F00E60060 /* BASS */ = {
+			isa = PBXGroup;
+			children = (
+				7CD47AF21DB90F0300E60060 /* bass.h */,
+				7CD47AF11DB90EFA00E60060 /* bassmix.h */,
+				7CD47AE91DB90E2300E60060 /* libbassmix.a */,
+				7CD47AEA1DB90E2300E60060 /* libbass.a */,
+			);
+			name = BASS;
+			sourceTree = "<group>";
+		};
+		7CD47AF31DB9163D00E60060 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7CD47AFC1DB9166B00E60060 /* Accelerate.framework */,
+				7CD47AFA1DB9166200E60060 /* CFNetwork.framework */,
+				7CD47AF81DB9165C00E60060 /* SystemConfiguration.framework */,
+				7CD47AF61DB9165000E60060 /* AudioToolbox.framework */,
+				7CD47AF41DB9163D00E60060 /* CoreAudio.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -96,6 +149,7 @@
 				TargetAttributes = {
 					7CD47AD21DB90E0500E60060 = {
 						CreatedOnToolsVersion = 8.0;
+						LastSwiftMigration = 0800;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -136,6 +190,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7CD47AF01DB90E4C00E60060 /* ObjectiveBASS.m in Sources */,
 				7CD47AD91DB90E0500E60060 /* ViewController.swift in Sources */,
 				7CD47AD71DB90E0500E60060 /* AppDelegate.swift in Sources */,
 			);
@@ -258,10 +313,17 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
 				INFOPLIST_FILE = "BASS Audio Test/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(PROJECT_DIR)/BASS Audio Test\"",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.alecgorge.BASS-Audio-Test";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "BASS Audio Test/BASS Audio Test-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 3.0;
 			};
 			name = Debug;
@@ -270,10 +332,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
 				INFOPLIST_FILE = "BASS Audio Test/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(PROJECT_DIR)/BASS Audio Test\"",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.alecgorge.BASS-Audio-Test";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "BASS Audio Test/BASS Audio Test-Bridging-Header.h";
 				SWIFT_VERSION = 3.0;
 			};
 			name = Release;

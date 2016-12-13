@@ -9,12 +9,19 @@
 import UIKit
 
 class ViewController: UIViewController {
-
+    var bass: ObjectiveBASS? = nil
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
+        
+        bass = ObjectiveBASS()
+        
+        bass?.start()
     }
 
+    @IBAction func uiSeek(_ sender: AnyObject) {
+        bass?.seek(toPercent: 0.97)
+    }
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
