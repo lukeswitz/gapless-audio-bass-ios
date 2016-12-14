@@ -18,14 +18,19 @@
     HSTREAM streams[2];
     NSUInteger activeStreamIdx;
     
-    BOOL hasInactiveStreamBeenPreloaded;
+    BOOL hasInactiveStreamPreloadStarted;
+    BOOL hasInactiveStreamPreloadFinished;
     BOOL isInactiveStreamUsed;
+    
+    BOOL hasActiveStreamPreloadStarted;
+    BOOL hasActiveStreamPreloadFinished;
 }
 
 @property (nonatomic) HSTREAM activeStream;
 @property (nonatomic) HSTREAM inactiveStream;
 
 - (void)mixInNextTrack;
+- (void)streamDownloadComplete:(HSTREAM)stream;
 
 @end
 
@@ -46,7 +51,37 @@ void CALLBACK MixerEndSyncProc(HSYNC handle,
     [self mixInNextTrack];
 }
 
+void CALLBACK StreamDownloadCompleteSyncProc(HSYNC handle,
+                                            DWORD channel,
+                                            DWORD data,
+                                            void *user) {
+    // channel is the HSTREAM we created before
+    dbug(@"[bass][stream] stream completed: handle: %d. channel: %d", handle, channel);
+    ObjectiveBASS *self = (__bridge ObjectiveBASS *)user;
+    [self streamDownloadComplete:channel];
+}
+
 @implementation ObjectiveBASS
+
+- (void)nextTrackChanged {
+    if (![self.delegate BASSIsLastTrack:self]) {
+        [self.delegate BASSLoadNextTrackURL:self];
+    }
+}
+
+- (void)changeNextTrackToURL:(NSURL *)url
+              withIdentifier:(NSInteger)identifier {
+    if(isInactiveStreamUsed) {
+        BASS_ChannelStop(self.inactiveStream);
+    }
+    
+    _nextURL = url;
+    _nextIdentifier = identifier;
+    
+    [self setupInactiveStreamWithNext];
+}
+
+#pragma mark - Active/Inactive Stream Managment
 
 - (void)toggleActiveStreamIdx {
     activeStreamIdx = activeStreamIdx == 1 ? 0 : 1;
@@ -68,39 +103,13 @@ void CALLBACK MixerEndSyncProc(HSYNC handle,
     streams[activeStreamIdx == 1 ? 0 : 1] = inactiveStream;
 }
 
-- (NSInteger)calculateNextIndex {
-    if(_currentIndex + 1 >= self.urls.count) {
-        return NSNotFound;
-    }
-    
-    return _currentIndex + 1;
+#pragma mark - Order Management
+
+- (BOOL)hasNext {
+    return _nextURL != nil;
 }
 
-- (void)start {
-    [self setupBASS];
-    
-    [self play];
-}
-
-- (void)setupBASS {
-    BASS_Init(-1, 44100, 0, NULL, NULL);
-    
-    mixerMaster = BASS_Mixer_StreamCreate(44100, 2, BASS_MIXER_END);
-    
-    BASS_ChannelSetSync(mixerMaster, BASS_SYNC_END | BASS_SYNC_MIXTIME, 0, MixerEndSyncProc, (__bridge void *)(self));
-    activeStreamIdx = 0;
-}
-
-- (void)teardownBASS {
-    BASS_Free();
-}
-
-- (void)next {
-    _currentIndex = _nextIndex;
-    _nextIndex = [self calculateNextIndex];
-    
-    [self setupInactiveStreamWithNextIdx];
-}
+#pragma mark - Playback Control
 
 - (void)play {
     self.urls = @[
@@ -119,12 +128,50 @@ void CALLBACK MixerEndSyncProc(HSYNC handle,
                                     repeats:YES];
 }
 
-- (HSTREAM)streamForIndex:(NSInteger)idx {
-    return BASS_StreamCreateURL([self.urls[idx] cStringUsingEncoding:NSUTF8StringEncoding],
-                                0,
-                                BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_STREAM_STATUS,
-                                StreamDownloadProc,
-                                (__bridge void *)(self));
+- (void)next {
+    if(isInactiveStreamUsed) {
+        [self mixInNextTrack];
+    }
+}
+
+#pragma mark - BASS Lifecycle
+
+- (void)start {
+    [self setupBASS];
+    
+    [self play];
+}
+
+- (void)setupBASS {
+    BASS_Init(-1, 44100, 0, NULL, NULL);
+    
+    mixerMaster = BASS_Mixer_StreamCreate(44100, 2, BASS_MIXER_END);
+    
+    BASS_ChannelSetSync(mixerMaster, BASS_SYNC_END | BASS_SYNC_MIXTIME, 0, MixerEndSyncProc, (__bridge void *)(self));
+    
+    activeStreamIdx = 0;
+}
+
+- (void)teardownBASS {
+    BASS_Free();
+}
+
+- (HSTREAM)buildStreamForIndex:(NSInteger)idx {
+    HSTREAM newStream = BASS_StreamCreateURL([self.urls[idx] cStringUsingEncoding:NSUTF8StringEncoding],
+                                             0,
+                                             BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_STREAM_STATUS,
+                                             StreamDownloadProc,
+                                             (__bridge void *)(self));
+    
+    assert(BASS_ChannelSetSync(newStream,
+                               BASS_SYNC_MIXTIME | BASS_SYNC_DOWNLOAD,
+                               0,
+                               StreamDownloadCompleteSyncProc,
+                               (__bridge void *)(self)));
+    
+    dbug(@"[bass][stream] created new stream: %d", newStream);
+    
+    return newStream;
 }
 
 - (void)stopAndPlayIndex:(NSInteger)idx {
@@ -139,32 +186,58 @@ void CALLBACK MixerEndSyncProc(HSYNC handle,
     _currentIndex = idx;
     _nextIndex = [self calculateNextIndex];
     
-    self.activeStream = [self streamForIndex:idx];
-    [self setupInactiveStreamWithNextIdx];
+    self.activeStream = [self buildStreamForIndex:idx];
+    
+    hasActiveStreamPreloadFinished = NO;
+    hasActiveStreamPreloadStarted = YES;
     
     assert(BASS_Mixer_StreamAddChannel(mixerMaster, self.activeStream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
     assert(BASS_ChannelPlay(mixerMaster, FALSE));
 }
 
-- (void)setupInactiveStreamWithNextIdx {
-    if(self.nextIndex != NSNotFound) {
-        dbug(@"[bass] Next index found. Setting up next stream.");
-        BASS_Mixer_ChannelRemove(self.inactiveStream);
+- (void)streamDownloadComplete:(HSTREAM)stream {
+    if(stream == self.activeStream) {
+        hasActiveStreamPreloadFinished = YES;
         
-        self.inactiveStream = [self streamForIndex:self.nextIndex];
-        isInactiveStreamUsed = YES;
-        hasInactiveStreamBeenPreloaded = NO;
+        // active stream has fully loaded, load the next one
+        [self setupInactiveStreamWithNextIdx];
+    }
+    else if(stream == self.inactiveStream) {
+        hasInactiveStreamPreloadFinished = YES;
+        
+        // the inactive stream is also loaded--good, but we don't want to load anything else
+        // we do want to start decoding the downloaded data though
+        
+        // The amount of data to render, in milliseconds... 0 = default (2 x update period)
+        // assert(BASS_ChannelUpdate(self.inactiveStream, 0));
     }
     else {
-        isInactiveStreamUsed = NO;
-        hasInactiveStreamBeenPreloaded = NO;
+        assert(FALSE);
     }
 }
 
-- (void)preloadNextTrack {
+- (void)setupInactiveStreamWithNext {
+    if(self.nextURL != NSNotFound) {
+        dbug(@"[bass] Next index found. Setting up next stream.");
+        BASS_Mixer_ChannelRemove(self.inactiveStream);
+        
+        self.inactiveStream = [self buildStreamForIndex:self.nextIndex];
+        isInactiveStreamUsed = YES;
+        hasInactiveStreamPreloadStarted = NO;
+        
+        [self startPreloadingInactiveStream];
+    }
+    else {
+        isInactiveStreamUsed = NO;
+        hasInactiveStreamPreloadStarted = NO;
+        hasInactiveStreamPreloadFinished = NO;
+    }
+}
+
+- (void)startPreloadingInactiveStream {
     dbug(@"[bass][preloadNextTrack] Preloading next track");
     BASS_ChannelUpdate(self.inactiveStream, 0);
-    hasInactiveStreamBeenPreloaded = YES;
+    hasInactiveStreamPreloadStarted = YES;
 }
 
 - (void)mixInNextTrack {
@@ -173,10 +246,9 @@ void CALLBACK MixerEndSyncProc(HSYNC handle,
     HSTREAM previouslyInactiveStream = self.inactiveStream;
     
     if(isInactiveStreamUsed) {
-        BASS_Mixer_StreamAddChannel(self->mixerMaster, previouslyInactiveStream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN);
-        BASS_ChannelUpdate(previouslyInactiveStream, 0);
+        assert(BASS_Mixer_StreamAddChannel(self->mixerMaster, previouslyInactiveStream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
         
-        BASS_ChannelSetPosition(self->mixerMaster, 0, BASS_POS_BYTE);
+        assert(BASS_ChannelSetPosition(self->mixerMaster, 0, BASS_POS_BYTE));
     }
     
     [self toggleActiveStreamIdx];
@@ -187,6 +259,7 @@ void CALLBACK MixerEndSyncProc(HSYNC handle,
 - (void)printStatus {
     [self printStatus:activeStreamIdx withTrackIndex:_currentIndex];
     [self printStatus:activeStreamIdx == 0 ? 1 : 0 withTrackIndex:_nextIndex];
+    dbug(@" ");
 }
 
 - (void)printStatus:(NSInteger)streamIdx withTrackIndex:(NSInteger)idx {
@@ -203,10 +276,10 @@ void CALLBACK MixerEndSyncProc(HSYNC handle,
     dbug(@"[Stream: %lu, track: %lu] Connected: %llu. Download progress: %.3f. Playback progress: %.3f.\n", (unsigned long)streamIdx, idx, connected, downloadPct, playPct);
     
     // not 1.0f because sometimes file sizes get a bit off
-    if(streamIdx == activeStreamIdx && downloadPct >= .98f && !hasInactiveStreamBeenPreloaded) {
-        dbug(@"[bass] Active stream fully downloaded. Preloading next.");
-        [self preloadNextTrack];
-    }
+//    if(streamIdx == activeStreamIdx && downloadPct >= .98f && !hasInactiveStreamPreloadStarted) {
+//        dbug(@"[bass] Active stream fully downloaded. Preloading next.");
+//        [self preloadNextTrack];
+//    }
 }
 
 - (void)seekToPercent:(float)pct {
