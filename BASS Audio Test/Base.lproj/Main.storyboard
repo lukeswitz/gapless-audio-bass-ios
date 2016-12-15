@@ -6,6 +6,7 @@
     <dependencies>
         <deployment identifier="iOS"/>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="11757"/>
+        <capability name="Constraints to layout margins" minToolsVersion="6.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -28,14 +29,26 @@
                                     <action selector="uiSeek:" destination="BYZ-38-t0r" eventType="touchUpInside" id="0qw-PA-hd7"/>
                                 </connections>
                             </button>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="AWA-Ka-qbU">
+                                <rect key="frame" x="166" y="412" width="42" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <nil key="textColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="wEt-Ei-Y0M">
                                 <rect key="frame" x="166" y="374" width="42" height="21"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="AWA-Ka-qbU">
-                                <rect key="frame" x="166" y="412" width="42" height="21"/>
+                            <slider opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" value="0.5" minValue="0.0" maxValue="1" translatesAutoresizingMaskIntoConstraints="NO" id="D7F-BM-5Zc">
+                                <rect key="frame" x="14" y="465" width="347" height="31"/>
+                            </slider>
+                            <progressView opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="750" progress="0.5" translatesAutoresizingMaskIntoConstraints="NO" id="ulp-dj-xWh">
+                                <rect key="frame" x="16" y="520" width="343" height="2"/>
+                            </progressView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ksh-1e-24Z">
+                                <rect key="frame" x="166" y="251" width="42" height="21"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
@@ -43,21 +56,35 @@
                         </subviews>
                         <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
+                            <constraint firstItem="ulp-dj-xWh" firstAttribute="top" secondItem="D7F-BM-5Zc" secondAttribute="bottom" constant="25" id="D06-SD-jxh"/>
+                            <constraint firstAttribute="leadingMargin" secondItem="ulp-dj-xWh" secondAttribute="leading" id="DkR-aO-PB9"/>
+                            <constraint firstAttribute="trailingMargin" secondItem="ulp-dj-xWh" secondAttribute="trailing" id="FIh-Ri-dd8"/>
+                            <constraint firstItem="ulp-dj-xWh" firstAttribute="centerX" secondItem="D7F-BM-5Zc" secondAttribute="centerX" id="Ksx-0k-a8r"/>
+                            <constraint firstItem="D7F-BM-5Zc" firstAttribute="top" secondItem="AWA-Ka-qbU" secondAttribute="bottom" constant="32" id="Llf-lr-BYE"/>
                             <constraint firstItem="AWA-Ka-qbU" firstAttribute="centerX" secondItem="kHy-6m-gX7" secondAttribute="centerX" id="VLg-mp-h1o"/>
+                            <constraint firstAttribute="trailingMargin" secondItem="D7F-BM-5Zc" secondAttribute="trailing" id="XoF-4a-3Rc"/>
                             <constraint firstItem="kHy-6m-gX7" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" id="bvh-VP-BeW"/>
+                            <constraint firstItem="kHy-6m-gX7" firstAttribute="top" secondItem="ksh-1e-24Z" secondAttribute="bottom" constant="46.5" id="chS-Jg-fj4"/>
                             <constraint firstItem="wEt-Ei-Y0M" firstAttribute="top" secondItem="kHy-6m-gX7" secondAttribute="bottom" constant="25.5" id="dBo-Wx-9gS"/>
                             <constraint firstItem="wEt-Ei-Y0M" firstAttribute="centerX" secondItem="kHy-6m-gX7" secondAttribute="centerX" id="lXJ-ip-xjK"/>
                             <constraint firstItem="AWA-Ka-qbU" firstAttribute="top" secondItem="wEt-Ei-Y0M" secondAttribute="bottom" constant="17" id="myX-V7-302"/>
+                            <constraint firstAttribute="leadingMargin" secondItem="D7F-BM-5Zc" secondAttribute="leading" id="ndc-mq-Iaj"/>
+                            <constraint firstItem="ksh-1e-24Z" firstAttribute="centerX" secondItem="kHy-6m-gX7" secondAttribute="centerX" id="ntg-C7-arF"/>
                             <constraint firstItem="kHy-6m-gX7" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="qIm-NF-4qu"/>
+                            <constraint firstItem="D7F-BM-5Zc" firstAttribute="centerX" secondItem="AWA-Ka-qbU" secondAttribute="centerX" id="qih-43-Ayq"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="uiLabelDuration" destination="AWA-Ka-qbU" id="kAR-w0-N0J"/>
                         <outlet property="uiLabelElapsed" destination="wEt-Ei-Y0M" id="MNF-JD-B6S"/>
+                        <outlet property="uiLabelState" destination="ksh-1e-24Z" id="Vsh-Fd-qWT"/>
+                        <outlet property="uiProgressDownload" destination="ulp-dj-xWh" id="1WP-P3-QFu"/>
+                        <outlet property="uiSliderProgress" destination="D7F-BM-5Zc" id="dSI-Qe-Qbj"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
             </objects>
+            <point key="canvasLocation" x="32.799999999999997" y="38.23088455772114"/>
         </scene>
     </scenes>
 </document>

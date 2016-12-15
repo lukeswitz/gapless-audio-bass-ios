@@ -58,6 +58,9 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
                     downloadedBytes:(uint64_t)downloadedBytes
                          totalBytes:(uint64_t)totalBytes;
 
+- (void)BASSPlaybackProgressChanged:(NSTimeInterval)elapsed
+                  withTotalDuration:(NSTimeInterval)totalDuration;
+
 - (void)BASSDownloadPlaybackStateChanged:(BassPlaybackState)state;
 
 - (void)BASSErrorStartingStream:(nonnull NSError *)error

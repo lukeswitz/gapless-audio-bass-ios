@@ -8,7 +8,11 @@
 
 #import "ObjectiveBASS.h"
 
+#import <AVFoundation/AVFoundation.h>
+
 #define dbug NSLog
+
+#define VISUALIZATION_BUF_SIZE 4096
 
 @interface ObjectiveBASS (){
     
@@ -28,6 +32,11 @@
     dispatch_queue_t queue;
     
     BassPlaybackState _currentState;
+    
+    BOOL audioSessionAlreadySetUp;
+    BOOL wasPlayingWhenInterrupted;
+    
+    float *visualizationBuf[VISUALIZATION_BUF_SIZE];
 }
 
 @property (nonatomic) HSTREAM activeStream;
@@ -208,12 +217,16 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (void)dealloc {
     [self teardownBASS];
+    [self teardownAudioSession];
 }
 
 - (void)setupBASS {
     dispatch_async(queue, ^{
         // BASS_SetConfigPtr(BASS_CONFIG_NET_PROXY, "192.168.1.196:8888");
         BASS_SetConfig(BASS_CONFIG_NET_TIMEOUT, 15 * 1000);
+        
+        // we'll manage ourselves, thanks.
+        BASS_SetConfig(BASS_CONFIG_IOS_NOCATEGORY, 1);
         
         BASS_Init(-1, 44100, 0, NULL, NULL);
         
@@ -334,6 +347,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         return;
     }
     
+    [self setupAudioSession];
+
     dispatch_async(queue, ^{
         // stop playback
         assert(BASS_ChannelStop(mixerMaster));
@@ -361,7 +376,54 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             
             [self changeCurrentState:BassPlaybackStatePlaying];
         }
-    });    
+    });
+    
+    [self startUpdates];
+}
+
+- (void)startUpdates {
+    NSTimeInterval oldElapsed = self.elapsed;
+    NSTimeInterval oldDuration = self.currentDuration;
+
+    QWORD oldDownloadedBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_DOWNLOAD);
+    QWORD oldTotalFileBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_SIZE);
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), queue, ^{
+        NSTimeInterval elapsed = self.elapsed;
+        NSTimeInterval duration = self.currentDuration;
+        
+        QWORD downloadedBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_DOWNLOAD);
+        QWORD totalFileBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_SIZE);
+        
+        if(oldElapsed != elapsed || oldDuration != duration) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self.delegate BASSPlaybackProgressChanged:elapsed
+                                         withTotalDuration:duration];
+            });
+        }
+        
+        if((downloadedBytes != -1 || totalFileBytes != -1 || oldTotalFileBytes != -1 || oldTotalFileBytes != -1)
+        && (oldDownloadedBytes != downloadedBytes || oldTotalFileBytes != totalFileBytes)) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self.delegate BASSDownloadProgressChanged:YES
+                                           downloadedBytes:downloadedBytes
+                                                totalBytes:totalFileBytes];
+            });
+        }
+        
+        /*
+        DWORD len = BASS_ChannelGetData(self.activeStream, visualizationBuf, VISUALIZATION_BUF_SIZE);
+        
+        if(len != -1) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self.delegate BASSDidReceiveBuffer:(float *)visualizationBuf
+                                             length:len];
+            });
+        }
+         */
+        
+        [self startUpdates];
+    });
 }
 
 - (void)streamStalled:(HSTREAM)stream {
@@ -629,4 +691,147 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                            userInfo:@{NSLocalizedDescriptionKey: str}];
 }
 
+#pragma mark - Audio Session Routing/Interruption Handling
+
+- (void)setupAudioSession {
+    if(!audioSessionAlreadySetUp) {
+        AVAudioSession *session = AVAudioSession.sharedInstance;
+        
+        [session setCategory:AVAudioSessionCategoryPlayback
+                 withOptions:AVAudioSessionCategoryOptionAllowAirPlay | AVAudioSessionCategoryOptionAllowBluetooth
+                       error:nil];
+        
+        [session setActive:YES
+                     error:nil];
+        
+        // Register for Route Change notifications
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                               selector:@selector(handleRouteChange:)
+                                                   name:AVAudioSessionRouteChangeNotification
+                                                 object:session];
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                               selector:@selector(handleInterruption:)
+                                                   name:AVAudioSessionInterruptionNotification
+                                                 object:session];
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                               selector:@selector(handleMediaServicesWereReset:)
+                                                   name:AVAudioSessionMediaServicesWereResetNotification
+                                                 object:session];
+        audioSessionAlreadySetUp = YES;
+    }
+}
+
+- (void)teardownAudioSession {
+    [AVAudioSession.sharedInstance setActive:NO
+                                       error:nil];
+    
+    [NSNotificationCenter.defaultCenter removeObserver:self name:@"AVAudioSessionRouteChangeNotification" object:nil];
+    [NSNotificationCenter.defaultCenter removeObserver:self name:@"AVAudioSessionInterruptionNotification" object:nil];
+    [NSNotificationCenter.defaultCenter removeObserver:self name:@"AVAudioSessionMediaServicesWereResetNotification" object:nil];
+}
+
+- (void)handleMediaServicesWereReset:(NSNotification*)notification{
+    //  If the media server resets for any reason, handle this notification to reconfigure audio or do any housekeeping, if necessary
+    //    • No userInfo dictionary for this notification
+    //      • Audio streaming objects are invalidated (zombies)
+    //      • Handle this notification by fully reconfiguring audio
+    dbug(@"handleMediaServicesWereReset: %@ ",[notification name]);
+}
+
+- (void)handleInterruption:(NSNotification*)notification{
+    NSInteger reason = 0;
+    NSString* reasonStr=@"";
+    if ([notification.name isEqualToString:@"AVAudioSessionInterruptionNotification"]) {
+        // Posted when an audio interruption occurs.
+        
+        reason = [[notification.userInfo objectForKey:AVAudioSessionInterruptionTypeKey] integerValue];
+        if (reason == AVAudioSessionInterruptionTypeBegan) {
+            // Audio has stopped, already inactive
+            // Change state of UI, etc., to reflect non-playing state
+            wasPlayingWhenInterrupted = self.currentState == BassPlaybackStatePlaying || self.currentState == BassPlaybackStateStalled;
+            
+            [self pause];
+        }
+        
+        if (reason == AVAudioSessionInterruptionTypeEnded) {
+            // Make session active
+            // Update user interface
+            // AVAudioSessionInterruptionOptionShouldResume option
+            
+            reasonStr = @"AVAudioSessionInterruptionTypeEnded";
+            
+            NSNumber* seccondReason = [[notification userInfo] objectForKey:AVAudioSessionInterruptionOptionKey];
+            
+            switch (seccondReason.integerValue) {
+                case AVAudioSessionInterruptionOptionShouldResume:
+                    // Indicates that the audio session is active and immediately ready to be used. Your app can resume the audio operation that was interrupted.
+                    if(wasPlayingWhenInterrupted) {
+                        [self resume];
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        
+        /*
+        if ([notification.name isEqualToString:@"AVAudioSessionDidBeginInterruptionNotification"]) {
+            if (soundSessionIO_.isProcessingSound) {
+                
+            }
+            //      Posted after an interruption in your audio session occurs.
+            //      This notification is posted on the main thread of your app. There is no userInfo dictionary.
+        }
+        if ([notification.name isEqualToString:@"AVAudioSessionDidEndInterruptionNotification"]) {
+            //      Posted after an interruption in your audio session ends.
+            //      This notification is posted on the main thread of your app. There is no userInfo dictionary.
+        }
+        if ([notification.name isEqualToString:@"AVAudioSessionInputDidBecomeAvailableNotification"]) {
+            //      Posted when an input to the audio session becomes available.
+            //      This notification is posted on the main thread of your app. There is no userInfo dictionary.
+        }
+        if ([notification.name isEqualToString:@"AVAudioSessionInputDidBecomeUnavailableNotification"]) {
+            //      Posted when an input to the audio session becomes unavailable.
+            //      This notification is posted on the main thread of your app. There is no userInfo dictionary.
+        }
+        */
+    }
+    
+    dbug(@"handleInterruption: %@ reason %@", [notification name], reasonStr);
+}
+
+-(void)handleRouteChange:(NSNotification*)notification{
+    NSString* seccReason = nil;
+    NSInteger reason = [[notification.userInfo objectForKey:AVAudioSessionRouteChangeReasonKey] integerValue];
+
+    switch (reason) {
+        case AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory:
+            seccReason = @"The route changed because no suitable route is now available for the specified category.";
+            break;
+        case AVAudioSessionRouteChangeReasonWakeFromSleep:
+            seccReason = @"The route changed when the device woke up from sleep.";
+            break;
+        case AVAudioSessionRouteChangeReasonOverride:
+            seccReason = @"The output route was overridden by the app.";
+            break;
+        case AVAudioSessionRouteChangeReasonCategoryChange:
+            seccReason = @"The category of the session object changed.";
+            break;
+        case AVAudioSessionRouteChangeReasonOldDeviceUnavailable:
+            seccReason = @"The previous audio output path is no longer available.";
+            [self pause];
+            break;
+        case AVAudioSessionRouteChangeReasonNewDeviceAvailable:
+            seccReason = @"A preferred new audio output path is now available.";
+            break;
+        case AVAudioSessionRouteChangeReasonUnknown:
+        default:
+            seccReason = @"The reason for the change is unknown.";
+            break;
+    }
+    
+    dbug(@"handlRouteChange: %@", seccReason);
+}
+
 @end
+

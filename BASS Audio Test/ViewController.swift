@@ -27,47 +27,22 @@ class ViewController: UIViewController {
         bass?.dataSource = self
         
         bass?.play(URL(string: urls[idx])!, withIdentifier: 100)
-        
-        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { (t) in
-            if let b = self.bass {
-                self.uiLabelElapsed.text = self.stringFromTimeInterval(b.elapsed)
-                self.uiLabelDuration.text = self.stringFromTimeInterval(b.currentDuration)
-            }
-        }
     }
     
     func stringFromTimeInterval(_ interval: TimeInterval) -> String {
         let ti = NSInteger(interval)
         
-        let ms = Int((interval.truncatingRemainder(dividingBy: 1)) * 1000)
-        
         let seconds = ti % 60
         let minutes = (ti / 60) % 60
         
-        return NSString(format: "%0.2d:%0.2d.%0.3d", minutes,seconds,ms) as String
+        return NSString(format: "%0.2d:%0.2d", minutes,seconds) as String
     }
 
-    /*
- - (void)play {
- self.urls = @[
- @"http://phish.in/audio/000/025/507/25507.mp3",
- @"http://phish.in/audio/000/025/508/25508.mp3",
- @"http://phish.in/audio/000/025/509/25509.mp3",
- @"http://phish.in/audio/000/025/510/25510.mp3"
- ];
- 
- [self stopAndPlayIndex:0];
- 
- [NSTimer scheduledTimerWithTimeInterval:0.5
- target:self
- selector:@selector(printStatus)
- userInfo:nil
- repeats:YES];
- }
- */
- 
     @IBOutlet weak var uiLabelElapsed: UILabel!
     @IBOutlet weak var uiLabelDuration: UILabel!
+    @IBOutlet weak var uiSliderProgress: UISlider!
+    @IBOutlet weak var uiProgressDownload: UIProgressView!
+    @IBOutlet weak var uiLabelState: UILabel!
     
     @IBAction func uiSeek(_ sender: AnyObject) {
         bass?.seek(toPercent: 0.97)
@@ -80,15 +55,34 @@ class ViewController: UIViewController {
 
 extension ViewController : ObjectiveBASSDelegate {
     func bassDownloadProgressChanged(_ forActiveTrack: Bool, downloadedBytes: UInt64, totalBytes: UInt64) {
-        
+        uiProgressDownload.progress = Float(downloadedBytes) / Float(totalBytes);
+    }
+    
+    func textForState(_ state: BassPlaybackState) -> String {
+        switch state {
+        case .paused:
+            return "Paused"
+        case .playing:
+            return "Playing"
+        case .stalled:
+            return "Stalled"
+        case .stopped:
+            return "Stopped"
+        }
     }
     
     func bassDownloadPlaybackStateChanged(_ state: BassPlaybackState) {
-        
+        uiLabelState.text = textForState(state);
     }
     
     func bassErrorStartingStream(_ error: Error, for url: URL, withIdentifier identifier: Int) {
         print(error);
+    }
+    
+    func bassPlaybackProgressChanged(_ elapsed: TimeInterval, withTotalDuration totalDuration: TimeInterval) {
+        uiLabelElapsed.text = stringFromTimeInterval(elapsed)
+        uiLabelDuration.text = stringFromTimeInterval(totalDuration)
+        uiSliderProgress.value = Float(elapsed / totalDuration)
     }
 }
 

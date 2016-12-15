@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7C774D411E02371000DF435E /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C774D401E02371000DF435E /* AVFoundation.framework */; };
 		7CD47AD71DB90E0500E60060 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CD47AD61DB90E0500E60060 /* AppDelegate.swift */; };
 		7CD47AD91DB90E0500E60060 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CD47AD81DB90E0500E60060 /* ViewController.swift */; };
 		7CD47ADC1DB90E0500E60060 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 7CD47ADA1DB90E0500E60060 /* Main.storyboard */; };
@@ -22,6 +23,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7C774D401E02371000DF435E /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		7CD47AD31DB90E0500E60060 /* BASS Audio Test.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BASS Audio Test.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7CD47AD61DB90E0500E60060 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7CD47AD81DB90E0500E60060 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
@@ -41,6 +43,9 @@
 		7CD47AF81DB9165C00E60060 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		7CD47AFA1DB9166200E60060 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
 		7CD47AFC1DB9166B00E60060 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		9909448ACC3058F2834909F2 /* Pods_BASS_Audio_Test.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_BASS_Audio_Test.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB3C62FD9498DB0503BB2259 /* Pods-BASS Audio Test.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BASS Audio Test.release.xcconfig"; path = "Pods/Target Support Files/Pods-BASS Audio Test/Pods-BASS Audio Test.release.xcconfig"; sourceTree = "<group>"; };
+		E3D86011BB8FD355C8F3F945 /* Pods-BASS Audio Test.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BASS Audio Test.debug.xcconfig"; path = "Pods/Target Support Files/Pods-BASS Audio Test/Pods-BASS Audio Test.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,6 +53,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7C774D411E02371000DF435E /* AVFoundation.framework in Frameworks */,
 				7CD47AFD1DB9166B00E60060 /* Accelerate.framework in Frameworks */,
 				7CD47AFB1DB9166200E60060 /* CFNetwork.framework in Frameworks */,
 				7CD47AF91DB9165C00E60060 /* SystemConfiguration.framework in Frameworks */,
@@ -60,12 +66,31 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		490ACA4F021EBA99209EAB19 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				E3D86011BB8FD355C8F3F945 /* Pods-BASS Audio Test.debug.xcconfig */,
+				AB3C62FD9498DB0503BB2259 /* Pods-BASS Audio Test.release.xcconfig */,
+			);
+			name = Pods;
+			sourceTree = "<group>";
+		};
+		7C774D421E02385F00DF435E /* ObjectiveBASS */ = {
+			isa = PBXGroup;
+			children = (
+				7CD47AEE1DB90E4C00E60060 /* ObjectiveBASS.h */,
+				7CD47AEF1DB90E4C00E60060 /* ObjectiveBASS.m */,
+			);
+			name = ObjectiveBASS;
+			sourceTree = "<group>";
+		};
 		7CD47ACA1DB90E0500E60060 = {
 			isa = PBXGroup;
 			children = (
 				7CD47AD51DB90E0500E60060 /* BASS Audio Test */,
 				7CD47AD41DB90E0500E60060 /* Products */,
 				7CD47AF31DB9163D00E60060 /* Frameworks */,
+				490ACA4F021EBA99209EAB19 /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -80,6 +105,7 @@
 		7CD47AD51DB90E0500E60060 /* BASS Audio Test */ = {
 			isa = PBXGroup;
 			children = (
+				7C774D421E02385F00DF435E /* ObjectiveBASS */,
 				7CD47AE81DB90E0F00E60060 /* BASS */,
 				7CD47AD61DB90E0500E60060 /* AppDelegate.swift */,
 				7CD47AD81DB90E0500E60060 /* ViewController.swift */,
@@ -87,8 +113,6 @@
 				7CD47ADD1DB90E0500E60060 /* Assets.xcassets */,
 				7CD47ADF1DB90E0500E60060 /* LaunchScreen.storyboard */,
 				7CD47AE21DB90E0500E60060 /* Info.plist */,
-				7CD47AEE1DB90E4C00E60060 /* ObjectiveBASS.h */,
-				7CD47AEF1DB90E4C00E60060 /* ObjectiveBASS.m */,
 				7CD47AED1DB90E4C00E60060 /* BASS Audio Test-Bridging-Header.h */,
 			);
 			path = "BASS Audio Test";
@@ -108,11 +132,13 @@
 		7CD47AF31DB9163D00E60060 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				7C774D401E02371000DF435E /* AVFoundation.framework */,
 				7CD47AFC1DB9166B00E60060 /* Accelerate.framework */,
 				7CD47AFA1DB9166200E60060 /* CFNetwork.framework */,
 				7CD47AF81DB9165C00E60060 /* SystemConfiguration.framework */,
 				7CD47AF61DB9165000E60060 /* AudioToolbox.framework */,
 				7CD47AF41DB9163D00E60060 /* CoreAudio.framework */,
+				9909448ACC3058F2834909F2 /* Pods_BASS_Audio_Test.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -152,6 +178,11 @@
 						DevelopmentTeam = HT7ELV3Q35;
 						LastSwiftMigration = 0800;
 						ProvisioningStyle = Automatic;
+						SystemCapabilities = {
+							com.apple.BackgroundModes = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
