@@ -11,12 +11,58 @@
 #include "bass.h"
 #include "bassmix.h"
 
+typedef NS_ENUM(NSInteger, BassPlaybackState) {
+    BassPlaybackStateStopped = BASS_ACTIVE_STOPPED,
+    BassPlaybackStatePlaying = BASS_ACTIVE_PLAYING,
+    BassPlaybackStatePaused  = BASS_ACTIVE_PAUSED,
+    BassPlaybackStateStalled = BASS_ACTIVE_STALLED
+};
+
+typedef NS_ENUM(NSInteger, BassStreamError) {
+    BassStreamErrorInit = BASS_ERROR_INIT,
+    BassStreamErrorNotAvail = BASS_ERROR_NOTAVAIL,
+    BassStreamErrorNoInternet = BASS_ERROR_NONET,
+    BassStreamErrorInvalidUrl = BASS_ERROR_ILLPARAM,
+    BassStreamErrorSslUnsupported = BASS_ERROR_SSL,
+    BassStreamErrorServerTimeout = BASS_ERROR_TIMEOUT,
+    BassStreamErrorCouldNotOpenFile = BASS_ERROR_FILEOPEN,
+    BassStreamErrorFileInvalidFormat = BASS_ERROR_FILEFORM,
+    BassStreamErrorSupportedCodec = BASS_ERROR_CODEC,
+    BassStreamErrorUnsupportedSampleFormat = BASS_ERROR_SPEAKER,
+    BassStreamErrorInsufficientMemory = BASS_ERROR_MEM,
+    BassStreamErrorNo3D = BASS_ERROR_NO3D,
+    BassStreamErrorUnknown = BASS_ERROR_UNKNOWN // oh shit
+};
+
 @class ObjectiveBASS;
+
+@protocol ObjectiveBASSDataSource <NSObject>
+
+/// url and identifier are self.currentlyPlayingURL and currentlyPlayingIdentifier
+- (BOOL)BASSIsPlayingLastTrack:(nonnull ObjectiveBASS *)bass
+                       withURL:(nonnull NSURL *)url
+                 andIdentifier:(NSInteger)identifier;
+
+- (NSInteger)BASSNextTrackIdentifier:(nonnull ObjectiveBASS *)bass
+                            afterURL:(nonnull NSURL *)url
+                      withIdentifier:(NSInteger)identifier;
+
+- (void)BASSLoadNextTrackURL:(nonnull ObjectiveBASS *)bass
+               forIdentifier:(NSInteger)identifier;
+
+@end
 
 @protocol ObjectiveBASSDelegate <NSObject>
 
-- (BOOL)BASSIsLastTrack:(ObjectiveBASS *)bass;
-- (void)BASSLoadNextTrackURL:(ObjectiveBASS *)bass;
+- (void)BASSDownloadProgressChanged:(BOOL)forActiveTrack
+                    downloadedBytes:(uint64_t)downloadedBytes
+                         totalBytes:(uint64_t)totalBytes;
+
+- (void)BASSDownloadPlaybackStateChanged:(BassPlaybackState)state;
+
+- (void)BASSErrorStartingStream:(nonnull NSError *)error
+                         forURL:(nonnull NSURL *)url
+                 withIdentifier:(NSInteger)identifier;
 
 @end
 
@@ -24,25 +70,32 @@
 
 #pragma mark - Lifecyle
 
-- (void)start;
-
-@property (nonatomic, weak) id<ObjectiveBASSDelegate> delegate;
+@property (nonatomic, weak) _Nullable id<ObjectiveBASSDataSource> dataSource;
+@property (nonatomic, weak) _Nullable id<ObjectiveBASSDelegate> delegate;
 
 #pragma mark - Currently Playing
 
-@property (nonatomic, readonly) NSURL *currentlyPlayingURL;
+@property (nonatomic, readonly) NSURL * _Nullable currentlyPlayingURL;
 @property (nonatomic, readonly) NSInteger currentlyPlayingIdentifier;
 
 #pragma mark - Next Track
 
 @property (nonatomic, readonly) BOOL hasNext;
-@property (nonatomic, readonly) NSURL *nextURL;
+@property (nonatomic, readonly) NSURL * _Nullable nextURL;
 @property (nonatomic, readonly) NSInteger nextIdentifier;
 
 - (void)nextTrackChanged;
-- (void)changeNextTrackToURL:(NSURL *)url withIdentifier:(NSInteger)identifier;
+- (void)nextTrackURLLoaded:(nonnull NSURL *)url;
 
 #pragma mark - Playback Controls
+
+@property (nonatomic, readonly) BassPlaybackState currentState;
+
+@property (nonatomic, readonly) NSTimeInterval currentDuration;
+@property (nonatomic, readonly) NSTimeInterval elapsed;
+
+@property (nonatomic, readonly) NSUInteger downloadedBytes;
+@property (nonatomic, readonly) NSUInteger totalFileBytes;
 
 - (void)seekToPercent:(float)pct;
 
@@ -50,6 +103,11 @@
 - (void)pause;
 - (void)next;
 
-- (void)playURL:(NSURL *)url withIdentifier:(NSInteger)identifier;
+- (void)playURL:(nonnull NSURL *)url
+ withIdentifier:(NSInteger)identifier;
+
+- (void)playURL:(nonnull NSURL *)url
+ withIdentifier:(NSInteger)identifier
+     startingAt:(float)pct;
 
 @end

@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="11201" systemVersion="16A323" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="11762" systemVersion="16B2555" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
+    <device id="retina4_7" orientation="portrait">
+        <adaptation id="fullscreen"/>
+    </device>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="11161"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="11757"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -19,18 +22,39 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="kHy-6m-gX7">
+                                <rect key="frame" x="145" y="318.5" width="85" height="30"/>
                                 <state key="normal" title="Seek to 97%"/>
                                 <connections>
                                     <action selector="uiSeek:" destination="BYZ-38-t0r" eventType="touchUpInside" id="0qw-PA-hd7"/>
                                 </connections>
                             </button>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="wEt-Ei-Y0M">
+                                <rect key="frame" x="166" y="374" width="42" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <nil key="textColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="AWA-Ka-qbU">
+                                <rect key="frame" x="166" y="412" width="42" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <nil key="textColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
+                            <constraint firstItem="AWA-Ka-qbU" firstAttribute="centerX" secondItem="kHy-6m-gX7" secondAttribute="centerX" id="VLg-mp-h1o"/>
                             <constraint firstItem="kHy-6m-gX7" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" id="bvh-VP-BeW"/>
+                            <constraint firstItem="wEt-Ei-Y0M" firstAttribute="top" secondItem="kHy-6m-gX7" secondAttribute="bottom" constant="25.5" id="dBo-Wx-9gS"/>
+                            <constraint firstItem="wEt-Ei-Y0M" firstAttribute="centerX" secondItem="kHy-6m-gX7" secondAttribute="centerX" id="lXJ-ip-xjK"/>
+                            <constraint firstItem="AWA-Ka-qbU" firstAttribute="top" secondItem="wEt-Ei-Y0M" secondAttribute="bottom" constant="17" id="myX-V7-302"/>
                             <constraint firstItem="kHy-6m-gX7" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="qIm-NF-4qu"/>
                         </constraints>
                     </view>
+                    <connections>
+                        <outlet property="uiLabelDuration" destination="AWA-Ka-qbU" id="kAR-w0-N0J"/>
+                        <outlet property="uiLabelElapsed" destination="wEt-Ei-Y0M" id="MNF-JD-B6S"/>
+                    </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
             </objects>
