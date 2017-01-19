@@ -41,14 +41,14 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
 /// url and identifier are self.currentlyPlayingURL and currentlyPlayingIdentifier
 - (BOOL)BASSIsPlayingLastTrack:(nonnull ObjectiveBASS *)bass
                        withURL:(nonnull NSURL *)url
-                 andIdentifier:(NSInteger)identifier;
+                 andIdentifier:(nonnull NSUUID *)identifier;
 
-- (NSInteger)BASSNextTrackIdentifier:(nonnull ObjectiveBASS *)bass
-                            afterURL:(nonnull NSURL *)url
-                      withIdentifier:(NSInteger)identifier;
+- (nonnull NSUUID *)BASSNextTrackIdentifier:(nonnull ObjectiveBASS *)bass
+                                   afterURL:(nonnull NSURL *)url
+                             withIdentifier:(nonnull NSUUID *)identifier;
 
 - (void)BASSLoadNextTrackURL:(nonnull ObjectiveBASS *)bass
-               forIdentifier:(NSInteger)identifier;
+               forIdentifier:(nonnull NSUUID *)identifier;
 
 @end
 
@@ -65,7 +65,7 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
 
 - (void)BASSErrorStartingStream:(nonnull NSError *)error
                          forURL:(nonnull NSURL *)url
-                 withIdentifier:(NSInteger)identifier;
+                 withIdentifier:(nonnull NSUUID *)identifier;
 
 @end
 
@@ -79,15 +79,16 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
 #pragma mark - Currently Playing
 
 @property (nonatomic, readonly) NSURL * _Nullable currentlyPlayingURL;
-@property (nonatomic, readonly) NSInteger currentlyPlayingIdentifier;
+@property (nonatomic, readonly) NSUUID * _Nullable currentlyPlayingIdentifier;
 
 #pragma mark - Next Track
 
 @property (nonatomic, readonly) BOOL hasNext;
 @property (nonatomic, readonly) NSURL * _Nullable nextURL;
-@property (nonatomic, readonly) NSInteger nextIdentifier;
+@property (nonatomic, readonly) NSUUID * _Nullable nextIdentifier;
 
 - (void)nextTrackChanged;
+- (void)nextTrackMayHaveChanged;
 - (void)nextTrackURLLoaded:(nonnull NSURL *)url;
 
 #pragma mark - Playback Controls
@@ -100,17 +101,22 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
 @property (nonatomic, readonly) NSUInteger downloadedBytes;
 @property (nonatomic, readonly) NSUInteger totalFileBytes;
 
+@property (nonatomic) float volume;
+
 - (void)seekToPercent:(float)pct;
 
 - (void)resume;
 - (void)pause;
 - (void)next;
+- (void)stop;
 
 - (void)playURL:(nonnull NSURL *)url
- withIdentifier:(NSInteger)identifier;
+ withIdentifier:(nonnull NSUUID *)identifier;
 
 - (void)playURL:(nonnull NSURL *)url
- withIdentifier:(NSInteger)identifier
+ withIdentifier:(nonnull NSUUID *)identifier
      startingAt:(float)pct;
+
+- (NSError * _Nonnull)errorForErrorCode:(BassStreamError)erro;
 
 @end

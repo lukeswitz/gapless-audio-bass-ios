@@ -102,7 +102,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     BASS_ChannelStop(self.inactiveStream);
     
     _nextURL = 0;
-    _nextIdentifier = NSNotFound;
+    _nextIdentifier = nil;
     isInactiveStreamUsed = NO;
     hasInactiveStreamPreloadStarted = NO;
     hasInactiveStreamPreloadFinished = NO;
@@ -115,13 +115,21 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         [self stopAndResetInactiveStream];
     }
     else {
+        NSUUID *oldNext = _nextIdentifier;
+        
         _nextIdentifier = [self.dataSource BASSNextTrackIdentifier:self
                                                           afterURL:self.currentlyPlayingURL
                                                     withIdentifier:self.currentlyPlayingIdentifier];
         
-        [self.dataSource BASSLoadNextTrackURL:self
-                                forIdentifier:self.nextIdentifier];
+        if([_nextIdentifier isEqual:oldNext]) {
+            [self.dataSource BASSLoadNextTrackURL:self
+                                    forIdentifier:self.nextIdentifier];            
+        }
     }
+}
+
+- (void)nextTrackMayHaveChanged {
+    [self nextTrackChanged];
 }
 
 - (void)nextTrackURLLoaded:(NSURL *)url {
@@ -244,7 +252,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (HSTREAM)buildStreamForURL:(NSURL *)url
                   withOffset:(DWORD)offset
-               andIdentifier:(NSInteger)identifier {
+               andIdentifier:(NSUUID *)identifier {
     HSTREAM newStream = BASS_StreamCreateURL([url.absoluteString cStringUsingEncoding:NSUTF8StringEncoding],
                                              offset,
                                              BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_STREAM_STATUS,
@@ -284,14 +292,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (HSTREAM)buildAndSetupActiveStreamForURL:(NSURL *)url
-                            withIdentifier:(NSInteger)ident {
+                            withIdentifier:(NSUUID *)ident {
     return [self buildAndSetupActiveStreamForURL:url
                                   withIdentifier:ident
                                        andOffset:0];
 }
 
 - (HSTREAM)buildAndSetupActiveStreamForURL:(NSURL *)url
-                            withIdentifier:(NSInteger)ident
+                            withIdentifier:(NSUUID *)ident
                                  andOffset:(DWORD)offset {
     HSTREAM newStream = [self buildStreamForURL:url
                                      withOffset:offset
@@ -313,7 +321,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (HSTREAM)buildAndSetupInactiveStreamForURL:(NSURL *)url
-                              withIdentifier:(NSInteger)ident {
+                              withIdentifier:(NSUUID *)ident {
     HSTREAM newStream = [self buildStreamForURL:url withOffset:0 andIdentifier:ident];
     
     if(newStream == 0) {
@@ -332,14 +340,15 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     return self.inactiveStream;
 }
 
-- (void)playURL:(NSURL *)url withIdentifier:(NSInteger)identifier {
+- (void)playURL:(nonnull NSURL *)url
+ withIdentifier:(nonnull NSUUID *)identifier {
     [self playURL:url
    withIdentifier:identifier
        startingAt:0.0f];
 }
 
-- (void)playURL:(NSURL *)url
- withIdentifier:(NSInteger)identifier
+- (void)playURL:(nonnull NSURL *)url
+ withIdentifier:(nonnull NSUUID *)identifier
      startingAt:(float)pct {
     if(self.currentlyPlayingURL != nil && self.hasNextURL && [url isEqual:self.nextURL]) {
         _nextIdentifier = identifier;
@@ -614,6 +623,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     });
 }
 
+- (void)stop {
+    dispatch_async(queue, ^{
+        if(BASS_ChannelStop(mixerMaster)) {
+            [self changeCurrentState:BassPlaybackStateStopped];
+        }
+    });
+}
+
 - (void)seekToPercent:(float)pct {
     dispatch_async(queue, ^{
         [self _seekToPercent:pct];
@@ -652,6 +669,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     else {
         assert(BASS_ChannelSetPosition(self.activeStream, seekTo, BASS_POS_BYTE));
     }
+}
+
+- (float)volume {
+    return BASS_GetVolume();
+}
+
+- (void)setVolume:(float)volume {
+    BASS_SetVolume(volume);
 }
 
 #pragma mark - Error Helpers
