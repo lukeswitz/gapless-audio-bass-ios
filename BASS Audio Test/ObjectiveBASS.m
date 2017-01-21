@@ -121,7 +121,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                                           afterURL:self.currentlyPlayingURL
                                                     withIdentifier:self.currentlyPlayingIdentifier];
         
-        if([_nextIdentifier isEqual:oldNext]) {
+        if(![_nextIdentifier isEqual:oldNext]) {
             [self.dataSource BASSLoadNextTrackURL:self
                                     forIdentifier:self.nextIdentifier];            
         }
@@ -253,11 +253,22 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (HSTREAM)buildStreamForURL:(NSURL *)url
                   withOffset:(DWORD)offset
                andIdentifier:(NSUUID *)identifier {
-    HSTREAM newStream = BASS_StreamCreateURL([url.absoluteString cStringUsingEncoding:NSUTF8StringEncoding],
-                                             offset,
-                                             BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_STREAM_STATUS,
-                                             NULL, // StreamDownloadProc,
-                                             NULL); // (__bridge void *)(self));
+    HSTREAM newStream;
+    
+    if(url.isFileURL) {
+        newStream = BASS_StreamCreateFile(FALSE,
+                                          [url.path cStringUsingEncoding:NSUTF8StringEncoding],
+                                          offset,
+                                          0,
+                                          BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_ASYNCFILE);
+    }
+    else {
+        newStream = BASS_StreamCreateURL([url.absoluteString cStringUsingEncoding:NSUTF8StringEncoding],
+                                         offset,
+                                         BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT,
+                                         NULL, // StreamDownloadProc,
+                                         NULL); // (__bridge void *)(self));
+    }
     
     // oops
     if(newStream == 0) {
@@ -501,6 +512,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     hasInactiveStreamPreloadStarted = YES;
 }
 
+- (void)notifyDelegateThatTrackChanged:(NSUUID *)oldIdentifier
+                               withURL:(NSURL *)url {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.delegate BASSFinishedPlayingGUID:oldIdentifier
+                                        forURL:url];        
+    });
+}
+
 - (void)mixInNextTrack:(HSTREAM)completedTrack {
     dbug(@"[bass][MixerEndSyncProc] End Sync called for stream: %u", completedTrack);
     
@@ -511,8 +530,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     
     HSTREAM previouslyInactiveStream = self.inactiveStream;
     
+    NSUUID *previouslyActiveGUID = self.currentlyPlayingIdentifier;
+    NSURL *previouslyActiveURL = self.currentlyPlayingURL;
+    
     if([self updateNextTrackIfNecessary]) {
         // track updated, do nothing
+        [self notifyDelegateThatTrackChanged:previouslyActiveGUID
+                                     withURL:previouslyActiveURL];
+        
         return;
     }
     
@@ -544,6 +569,9 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         BASS_ChannelPause(mixerMaster);
         [self changeCurrentState:BassPlaybackStatePaused];
     }
+    
+    [self notifyDelegateThatTrackChanged:previouslyActiveGUID
+                                 withURL:previouslyActiveURL];
 }
 
 - (void)printStatus {
@@ -569,15 +597,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 #pragma mark - Playback Control
 
 - (BassPlaybackState)currentState {
-    dispatch_async(queue, ^{
-        BassPlaybackState state = BASS_ChannelIsActive(self.activeStream);
-        
-        if(state != _currentState) {
-            [self changeCurrentState:state];
-        }
-    });
-    
-    return _currentState;
+    return _currentState = BASS_ChannelIsActive(mixerMaster);
 }
 
 - (void)changeCurrentState:(BassPlaybackState)state {

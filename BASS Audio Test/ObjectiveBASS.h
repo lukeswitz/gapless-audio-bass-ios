@@ -67,6 +67,9 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
                          forURL:(nonnull NSURL *)url
                  withIdentifier:(nonnull NSUUID *)identifier;
 
+- (void)BASSFinishedPlayingGUID:(nonnull NSUUID *)identifier
+                         forURL:(nonnull NSURL *)url;
+
 @end
 
 @interface ObjectiveBASS : NSObject

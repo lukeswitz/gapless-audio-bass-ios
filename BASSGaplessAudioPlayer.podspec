@@ -118,7 +118,7 @@ Pod::Spec.new do |s|
   #
 
   # s.framework  = "SomeFramework"
-  # s.frameworks = "SomeFramework", "AnotherFramework"
+  s.frameworks = "AVFoundation", "Accelerate", "CFNetwork", "SystemConfiguration", "AudioToolbox"
 
   # s.library   = "iconv"
   s.ios.vendored_library = "BASS Audio Test/libbass.a", "BASS Audio Test/libbassmix.a"
