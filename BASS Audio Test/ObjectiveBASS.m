@@ -14,21 +14,54 @@
 
 #define VISUALIZATION_BUF_SIZE 4096
 
+@interface ObjectiveBassStream : NSObject
+
+@property (nonatomic) BOOL preloadStarted;
+@property (nonatomic) BOOL preloadFinished;
+
+@property (nonatomic) HSTREAM stream;
+
+@property (nonatomic) DWORD fileOffset;
+@property (nonatomic) QWORD channelOffset;
+
+@property (nonatomic) NSURL * _Nullable url;
+@property (nonatomic) NSUUID * _Nullable identifier;
+
+@end
+
+@implementation ObjectiveBassStream
+
+- (instancetype)init {
+    if (self = [super init]) {
+        [self clear];
+    }
+    return self;
+}
+
+- (void)clear {
+    _preloadStarted =
+    _preloadFinished = NO;
+    
+    _stream = 0;
+    _fileOffset = 0;
+    _channelOffset = 0;
+    
+    _url =
+    _identifier = nil;
+}
+
+@end
+
 @interface ObjectiveBASS (){
     
 @private
     HSTREAM mixerMaster;
     
-    HSTREAM streams[2];
+    ObjectiveBassStream *streams[2];
     NSUInteger activeStreamIdx;
     
-    BOOL hasInactiveStreamPreloadStarted;
-    BOOL hasInactiveStreamPreloadFinished;
     BOOL isInactiveStreamUsed;
     
-    BOOL hasActiveStreamPreloadStarted;
-    BOOL hasActiveStreamPreloadFinished;
-
     dispatch_queue_t queue;
     
     BassPlaybackState _currentState;
@@ -37,10 +70,12 @@
     BOOL wasPlayingWhenInterrupted;
     
     float *visualizationBuf[VISUALIZATION_BUF_SIZE];
+    
+    BOOL seeking;
 }
 
-@property (nonatomic) HSTREAM activeStream;
-@property (nonatomic) HSTREAM inactiveStream;
+@property (nonatomic) ObjectiveBassStream *activeStream;
+@property (nonatomic) ObjectiveBassStream *inactiveStream;
 
 - (void)mixInNextTrack:(HSTREAM)completedStream;
 - (void)streamDownloadComplete:(HSTREAM)stream;
@@ -99,13 +134,11 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (void)stopAndResetInactiveStream {
     // no assert because this might fail
-    BASS_ChannelStop(self.inactiveStream);
+    BASS_ChannelStop(self.inactiveStream.stream);
     
-    _nextURL = 0;
-    _nextIdentifier = nil;
+    [self.inactiveStream clear];
+    
     isInactiveStreamUsed = NO;
-    hasInactiveStreamPreloadStarted = NO;
-    hasInactiveStreamPreloadFinished = NO;
 }
 
 - (void)nextTrackChanged {
@@ -115,13 +148,13 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         [self stopAndResetInactiveStream];
     }
     else {
-        NSUUID *oldNext = _nextIdentifier;
+        NSUUID *oldNext = self.inactiveStream.identifier;
         
-        _nextIdentifier = [self.dataSource BASSNextTrackIdentifier:self
-                                                          afterURL:self.currentlyPlayingURL
-                                                    withIdentifier:self.currentlyPlayingIdentifier];
+        self.inactiveStream.identifier = [self.dataSource BASSNextTrackIdentifier:self
+                                                                         afterURL:self.currentlyPlayingURL
+                                                                   withIdentifier:self.currentlyPlayingIdentifier];
         
-        if(![_nextIdentifier isEqual:oldNext]) {
+        if(![self.inactiveStream.identifier isEqual:oldNext]) {
             [self.dataSource BASSLoadNextTrackURL:self
                                     forIdentifier:self.nextIdentifier];            
         }
@@ -140,13 +173,17 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (void)_nextTrackURLLoaded:(NSURL *)url {
     if(isInactiveStreamUsed) {
-        BASS_ChannelStop(self.inactiveStream);
+        BASS_ChannelStop(self.inactiveStream.stream);
     }
     
-    _nextURL = url;
+    self.inactiveStream.url = url;
     
-    if(hasActiveStreamPreloadFinished) {
+    if(self.activeStream.preloadFinished) {
+        dbug(@"[bass][stream] active stream preload complete, preloading next");
         [self setupInactiveStreamWithNext];
+    }
+    else {
+        dbug(@"[bass][stream] active stream preload NOT complete, NOT preloading next");
     }
 }
 
@@ -183,34 +220,20 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (void)toggleActiveStream {
     activeStreamIdx = activeStreamIdx == 1 ? 0 : 1;
-    
-    hasActiveStreamPreloadStarted = hasInactiveStreamPreloadStarted;
-    hasActiveStreamPreloadFinished = hasInactiveStreamPreloadFinished;
-    
-    _currentlyPlayingURL = self.nextURL;
-    _currentlyPlayingIdentifier = self.nextIdentifier;
 }
 
-- (HSTREAM)activeStream {
+- (ObjectiveBassStream *)activeStream {
     return streams[activeStreamIdx];
 }
 
-- (void)setActiveStream:(HSTREAM)activeStream {
-    streams[activeStreamIdx] = activeStream;
-}
-
-- (HSTREAM)inactiveStream {
+- (ObjectiveBassStream *)inactiveStream {
     return streams[activeStreamIdx == 1 ? 0 : 1];
-}
-
-- (void)setInactiveStream:(HSTREAM)inactiveStream {
-    streams[activeStreamIdx == 1 ? 0 : 1] = inactiveStream;
 }
 
 #pragma mark - Order Management
 
 - (BOOL)hasNextURL {
-    return _nextURL != nil;
+    return self.inactiveStream.url != nil;
 }
 
 #pragma mark - BASS Lifecycle
@@ -242,6 +265,9 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         
         BASS_ChannelSetSync(mixerMaster, BASS_SYNC_END | BASS_SYNC_MIXTIME, 0, MixerEndSyncProc, (__bridge void *)(self));
         
+        streams[0] = ObjectiveBassStream.new;
+        streams[1] = ObjectiveBassStream.new;
+        
         activeStreamIdx = 0;
     });
 }
@@ -251,20 +277,20 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (HSTREAM)buildStreamForURL:(NSURL *)url
-                  withOffset:(DWORD)offset
+              withFileOffset:(DWORD)fileOffset
                andIdentifier:(NSUUID *)identifier {
     HSTREAM newStream;
     
     if(url.isFileURL) {
         newStream = BASS_StreamCreateFile(FALSE,
                                           [url.path cStringUsingEncoding:NSUTF8StringEncoding],
-                                          offset,
+                                          fileOffset,
                                           0,
-                                          BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_ASYNCFILE);
+                                          BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_ASYNCFILE | BASS_STREAM_PRESCAN);
     }
     else {
         newStream = BASS_StreamCreateURL([url.absoluteString cStringUsingEncoding:NSUTF8StringEncoding],
-                                         offset,
+                                         fileOffset,
                                          BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT,
                                          NULL, // StreamDownloadProc,
                                          NULL); // (__bridge void *)(self));
@@ -303,50 +329,53 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (HSTREAM)buildAndSetupActiveStreamForURL:(NSURL *)url
-                            withIdentifier:(NSUUID *)ident {
+                                          withIdentifier:(NSUUID *)ident {
     return [self buildAndSetupActiveStreamForURL:url
                                   withIdentifier:ident
-                                       andOffset:0];
+                                      fileOffset:0
+                                andChannelOffset:0];
 }
 
 - (HSTREAM)buildAndSetupActiveStreamForURL:(NSURL *)url
                             withIdentifier:(NSUUID *)ident
-                                 andOffset:(DWORD)offset {
+                                fileOffset:(DWORD)offset
+                          andChannelOffset:(QWORD)channelOffset {
     HSTREAM newStream = [self buildStreamForURL:url
-                                     withOffset:offset
+                                 withFileOffset:offset
                                   andIdentifier:ident];
     
     if(newStream == 0) {
         return 0;
     }
     
-    self.activeStream = newStream;
+    [self.activeStream clear];
     
-    _currentlyPlayingURL = url;
-    _currentlyPlayingIdentifier = ident;
-    
-    hasActiveStreamPreloadStarted = YES;
-    hasActiveStreamPreloadFinished = NO;
+    self.activeStream.stream = newStream;
+    self.activeStream.identifier = ident;
+    self.activeStream.url = url;
+    self.activeStream.fileOffset = offset;
+    self.activeStream.channelOffset = channelOffset;
     
     return self.activeStream;
 }
 
-- (HSTREAM)buildAndSetupInactiveStreamForURL:(NSURL *)url
-                              withIdentifier:(NSUUID *)ident {
-    HSTREAM newStream = [self buildStreamForURL:url withOffset:0 andIdentifier:ident];
+- (ObjectiveBassStream *)buildAndSetupInactiveStreamForURL:(NSURL *)url
+                                            withIdentifier:(NSUUID *)ident {
+    HSTREAM newStream = [self buildStreamForURL:url withFileOffset:0 andIdentifier:ident];
     
     if(newStream == 0) {
         return 0;
     }
     
-    self.inactiveStream = newStream;
+    [self.inactiveStream clear];
     
-    _nextURL = url;
-    _nextIdentifier = ident;
+    self.inactiveStream.stream = newStream;
+    self.inactiveStream.identifier = ident;
+    self.inactiveStream.url = url;
+    self.inactiveStream.fileOffset = 0;
+    self.inactiveStream.channelOffset = 0;
     
     isInactiveStreamUsed = YES;
-    hasInactiveStreamPreloadStarted = YES;
-    hasActiveStreamPreloadFinished = NO;
     
     return self.inactiveStream;
 }
@@ -361,9 +390,13 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)playURL:(nonnull NSURL *)url
  withIdentifier:(nonnull NSUUID *)identifier
      startingAt:(float)pct {
-    if(self.currentlyPlayingURL != nil && self.hasNextURL && [url isEqual:self.nextURL]) {
-        _nextIdentifier = identifier;
+    if(self.currentlyPlayingURL != nil && self.hasNextURL && [identifier isEqual:self.nextIdentifier]) {
         [self next];
+        return;
+    }
+    else if([identifier isEqual:self.currentlyPlayingIdentifier]) {
+        [self seekToPercent:0.0f];
+        
         return;
     }
     
@@ -374,23 +407,23 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         assert(BASS_ChannelStop(mixerMaster));
         
         // stop channels to allow them to be freed
-        BASS_ChannelStop(self.activeStream);
+        BASS_ChannelStop(self.activeStream.stream);
         
         // remove this stream from the mixer
         // not assert'd because sometimes it should fail (initial playback)
-        BASS_Mixer_ChannelRemove(self.activeStream);
+        BASS_Mixer_ChannelRemove(self.activeStream.stream);
         
         // do the same thing for inactive--but only if the next track is actually different
         // and if something is currently playing
         if(self.currentlyPlayingURL != nil && [self hasNextTrackChanged]) {
-            BASS_ChannelStop(self.inactiveStream);
-            BASS_Mixer_ChannelRemove(self.inactiveStream);
+            BASS_ChannelStop(self.inactiveStream.stream);
+            BASS_Mixer_ChannelRemove(self.inactiveStream.stream);
         }
         
         if([self buildAndSetupActiveStreamForURL:url
                                   withIdentifier:identifier] != 0) {
             assert(BASS_Mixer_StreamAddChannel(mixerMaster,
-                                               self.activeStream,
+                                               self.activeStream.stream,
                                                BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             assert(BASS_ChannelPlay(mixerMaster, FALSE));
             
@@ -405,15 +438,15 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     NSTimeInterval oldElapsed = self.elapsed;
     NSTimeInterval oldDuration = self.currentDuration;
 
-    QWORD oldDownloadedBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_DOWNLOAD);
-    QWORD oldTotalFileBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_SIZE);
+    QWORD oldDownloadedBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_DOWNLOAD);
+    QWORD oldTotalFileBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_SIZE);
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), queue, ^{
         NSTimeInterval elapsed = self.elapsed;
         NSTimeInterval duration = self.currentDuration;
         
-        QWORD downloadedBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_DOWNLOAD);
-        QWORD totalFileBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_SIZE);
+        QWORD downloadedBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_DOWNLOAD);
+        QWORD totalFileBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_SIZE);
         
         if(oldElapsed != elapsed || oldDuration != duration) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -447,21 +480,21 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)streamStalled:(HSTREAM)stream {
-    if(stream == self.activeStream) {
+    if(stream == self.activeStream.stream) {
         [self changeCurrentState:BassPlaybackStateStalled];
     }
 }
 
 - (void)streamResumedAfterStall:(HSTREAM)stream {
-    if(stream == self.activeStream) {
+    if(stream == self.activeStream.stream) {
         [self changeCurrentState:BassPlaybackStatePlaying];
     }
 }
 
 - (void)streamDownloadComplete:(HSTREAM)stream {
-    if(stream == self.activeStream) {
-        if(!hasActiveStreamPreloadFinished) {
-            hasActiveStreamPreloadFinished = YES;
+    if(stream == self.activeStream.stream) {
+        if(!self.activeStream.preloadFinished) {
+            self.activeStream.preloadFinished = YES;
             
             // active stream has fully loaded, load the next one
             if(![self updateNextTrackIfNecessary]) {
@@ -469,9 +502,9 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             }
         }
     }
-    else if(stream == self.inactiveStream) {
-        hasInactiveStreamPreloadStarted = YES;
-        hasInactiveStreamPreloadFinished = YES;
+    else if(stream == self.inactiveStream.stream) {
+        self.inactiveStream.preloadStarted = YES;
+        self.inactiveStream.preloadFinished = YES;
         
         // the inactive stream is also loaded--good, but we don't want to load anything else
         // we do want to start decoding the downloaded data though
@@ -487,7 +520,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)setupInactiveStreamWithNext {
     if(self.hasNextURL) {
         dbug(@"[bass] Next index found. Setting up next stream.");
-        BASS_Mixer_ChannelRemove(self.inactiveStream);
+        BASS_Mixer_ChannelRemove(self.inactiveStream.stream);
         
         if([self buildAndSetupInactiveStreamForURL:self.nextURL
                                     withIdentifier:self.nextIdentifier] != 0) {
@@ -496,20 +529,20 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     }
     else {
         isInactiveStreamUsed = NO;
-        hasInactiveStreamPreloadStarted = NO;
-        hasInactiveStreamPreloadFinished = NO;
+        
+        [self.inactiveStream clear];
     }
 }
 
 - (void)startPreloadingInactiveStream {
     // don't start loading anything until the active stream has finished
-    if(!hasActiveStreamPreloadFinished) {
+    if(!self.activeStream.preloadFinished) {
         return;
     }
 
     dbug(@"[bass][preloadNextTrack] Preloading next track");
-    BASS_ChannelUpdate(self.inactiveStream, 0);
-    hasInactiveStreamPreloadStarted = YES;
+    BASS_ChannelUpdate(self.inactiveStream.stream, 0);
+    self.inactiveStream.preloadStarted = YES;
 }
 
 - (void)notifyDelegateThatTrackChanged:(NSUUID *)oldIdentifier
@@ -528,7 +561,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         return;
     }
     
-    HSTREAM previouslyInactiveStream = self.inactiveStream;
+    HSTREAM previouslyInactiveStream = self.inactiveStream.stream;
     
     NSUUID *previouslyActiveGUID = self.currentlyPlayingIdentifier;
     NSURL *previouslyActiveURL = self.currentlyPlayingURL;
@@ -539,6 +572,11 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                      withURL:previouslyActiveURL];
         
         return;
+    }
+    
+    if([self hasNextURL] && !isInactiveStreamUsed) {
+        dbug(@"[bass][stream] playback of %d finished and there is a next URL but there isn't a next stream. setting up", completedTrack);
+        [self setupInactiveStreamWithNext];
     }
     
     if(isInactiveStreamUsed) {
@@ -557,7 +595,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         //
         // in that case, retrigger the download complete event since it was last called
         // when the currently active stream was inactive and it did nothing
-        if(hasActiveStreamPreloadFinished) {
+        if(self.activeStream.preloadFinished) {
             if(![self updateNextTrackIfNecessary]) {
                 [self setupInactiveStreamWithNext];
             }
@@ -581,17 +619,35 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)printStatus:(NSInteger)streamIdx withTrackIndex:(NSInteger)idx {
-    QWORD connected = BASS_StreamGetFilePosition(streams[streamIdx], BASS_FILEPOS_CONNECTED);
-    QWORD downloadedBytes = BASS_StreamGetFilePosition(streams[streamIdx], BASS_FILEPOS_DOWNLOAD);
-    QWORD totalBytes = BASS_StreamGetFilePosition(streams[streamIdx], BASS_FILEPOS_SIZE);
+    QWORD connected = BASS_StreamGetFilePosition(streams[streamIdx].stream, BASS_FILEPOS_CONNECTED);
+    QWORD downloadedBytes = BASS_StreamGetFilePosition(streams[streamIdx].stream, BASS_FILEPOS_DOWNLOAD);
+    QWORD totalBytes = BASS_StreamGetFilePosition(streams[streamIdx].stream, BASS_FILEPOS_SIZE);
     
-    QWORD playedBytes = BASS_ChannelGetPosition(streams[streamIdx], BASS_POS_BYTE);
-    QWORD totalPlayableBytes = BASS_ChannelGetLength(streams[streamIdx], BASS_POS_BYTE);
+    QWORD playedBytes = BASS_ChannelGetPosition(streams[streamIdx].stream, BASS_POS_BYTE);
+    QWORD totalPlayableBytes = BASS_ChannelGetLength(streams[streamIdx].stream, BASS_POS_BYTE);
     
     double downloadPct = 1.0 * downloadedBytes / totalBytes;
     double playPct = 1.0 * playedBytes / totalPlayableBytes;
     
     dbug(@"[Stream: %lu %u, identifier: %lu] Connected: %llu. Download: %.3f%%. Playback: %.3f%%.\n", (unsigned long)streamIdx, streams[streamIdx], (long)idx, connected, downloadPct, playPct);
+}
+
+#pragma mark - Properties
+
+- (NSUUID *)currentlyPlayingIdentifier {
+    return self.activeStream.identifier;
+}
+
+- (NSURL *)currentlyPlayingURL {
+    return self.activeStream.url;
+}
+
+- (NSURL *)nextURL {
+    return self.inactiveStream.url;
+}
+
+- (NSUUID *)nextIdentifier {
+    return self.inactiveStream.identifier;
 }
 
 #pragma mark - Playback Control
@@ -608,19 +664,29 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (NSTimeInterval)currentDuration {
-    QWORD len = BASS_ChannelGetLength(self.activeStream, BASS_POS_BYTE);
-    return BASS_ChannelBytes2Seconds(self.activeStream, len);
+    QWORD len = BASS_ChannelGetLength(self.activeStream.stream, BASS_POS_BYTE);
+    
+    if(len == -1) {
+        return 0.0000001;
+    }
+
+    return BASS_ChannelBytes2Seconds(self.activeStream.stream, len + self.activeStream.channelOffset);
 }
 
 - (NSTimeInterval)elapsed {
-    QWORD elapsedBytes = BASS_ChannelGetPosition(self.activeStream, BASS_POS_BYTE);
-    return BASS_ChannelBytes2Seconds(self.activeStream, elapsedBytes);
+    QWORD elapsedBytes = BASS_ChannelGetPosition(self.activeStream.stream, BASS_POS_BYTE);
+    
+    if(elapsedBytes == -1) {
+        return 0.0;
+    }
+    
+    return BASS_ChannelBytes2Seconds(self.activeStream.stream, elapsedBytes + self.activeStream.channelOffset);
 }
 
 - (void)next {
     dispatch_async(queue, ^{
         if(isInactiveStreamUsed) {
-            [self mixInNextTrack:self.activeStream];
+            [self mixInNextTrack:self.activeStream.stream];
         }
     });
 }
@@ -658,36 +724,45 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)_seekToPercent:(float)pct {
-    QWORD len = BASS_ChannelGetLength(self.activeStream, BASS_POS_BYTE);
-    double duration = BASS_ChannelBytes2Seconds(self.activeStream, len);
-    QWORD seekTo = BASS_ChannelSeconds2Bytes(self.activeStream, duration * pct);
-    double seekToDuration = BASS_ChannelBytes2Seconds(self.activeStream, seekTo);
+    // NOTE: all these calculations use the stream request offset to translate the #s into one's valid
+    // for the *entire* track. we must be careful to identify situations where we need to make a new request
+    
+    QWORD len = BASS_ChannelGetLength(self.activeStream.stream, BASS_POS_BYTE) + self.activeStream.channelOffset;
+    double duration = BASS_ChannelBytes2Seconds(self.activeStream.stream, len);
+    QWORD seekTo = BASS_ChannelSeconds2Bytes(self.activeStream.stream, duration * pct);
+    double seekToDuration = BASS_ChannelBytes2Seconds(self.activeStream.stream, seekTo);
     
     dbug(@"[bass][stream %lu] Found length in bytes to be %llu bytes/%f. Seeking to: %llu bytes/%f", (unsigned long)activeStreamIdx, len, duration, seekTo, seekToDuration);
     
-    QWORD downloadedBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_DOWNLOAD);
-    QWORD totalFileBytes = BASS_StreamGetFilePosition(self.activeStream, BASS_FILEPOS_SIZE);
+    QWORD downloadedBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_DOWNLOAD) + self.activeStream.fileOffset;
+    QWORD totalFileBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_SIZE) + self.activeStream.fileOffset;
     double downloadedPct = 1.0 * downloadedBytes / totalFileBytes;
     
-    if(pct > downloadedPct) {
-        dbug(@"[bass][stream %lu] Seek %% (%f/%llu) is greater than downloaded %% (%f/%llu). Opening new stream.", (unsigned long)activeStreamIdx, pct, (QWORD)(pct * totalFileBytes), downloadedPct, downloadedBytes);
+    BOOL seekingBeforeStartOfThisRequest = seekTo < self.activeStream.channelOffset;
+    BOOL seekingBeyondDownloaded = pct > downloadedPct;
+    
+    // seeking before the offset point --> we need to make a new request
+    // seeking after the most recently downloaded data --> we need to make a new request
+    if(seekingBeforeStartOfThisRequest || seekingBeyondDownloaded) {
+        DWORD fileOffset = (DWORD)floor(pct * totalFileBytes);
+
+        dbug(@"[bass][stream %lu] Seek %% (%f/%llu) is greater than downloaded %% (%f/%lu) OR seek channel byte (%llu) < start channel offset (%llu). Opening new stream.", (unsigned long)activeStreamIdx, pct, fileOffset, downloadedPct, downloadedBytes, seekTo, self.activeStream.channelOffset);
         
-        HSTREAM oldActiveStream = self.activeStream;
-        
-        BASS_Mixer_ChannelRemove(oldActiveStream);
-        BASS_ChannelStop(oldActiveStream);
-        
-        QWORD fileOffset = (QWORD)floor(pct * totalFileBytes);
+        HSTREAM oldActiveStream = self.activeStream.stream;
         
         if([self buildAndSetupActiveStreamForURL:self.currentlyPlayingURL
                                   withIdentifier:self.currentlyPlayingIdentifier
-                                       andOffset:(DWORD)fileOffset] != 0) {
-            assert(BASS_Mixer_StreamAddChannel(mixerMaster, self.activeStream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
+                                      fileOffset:fileOffset
+                                andChannelOffset:seekTo] != 0) {
+            assert(BASS_Mixer_StreamAddChannel(mixerMaster, self.activeStream.stream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             assert(BASS_ChannelPlay(mixerMaster, TRUE));
+            
+            BASS_Mixer_ChannelRemove(oldActiveStream);
+            BASS_ChannelStop(oldActiveStream);
         }
     }
     else {
-        assert(BASS_ChannelSetPosition(self.activeStream, seekTo, BASS_POS_BYTE));
+        assert(BASS_ChannelSetPosition(self.activeStream.stream, seekTo - self.activeStream.channelOffset, BASS_POS_BYTE));
     }
 }
 

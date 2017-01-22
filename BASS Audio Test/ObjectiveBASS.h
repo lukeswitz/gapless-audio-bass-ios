@@ -86,7 +86,6 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
 
 #pragma mark - Next Track
 
-@property (nonatomic, readonly) BOOL hasNext;
 @property (nonatomic, readonly) NSURL * _Nullable nextURL;
 @property (nonatomic, readonly) NSUUID * _Nullable nextIdentifier;
 
