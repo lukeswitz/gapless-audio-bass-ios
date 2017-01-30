@@ -79,6 +79,13 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
 @property (nonatomic, weak) _Nullable id<ObjectiveBASSDataSource> dataSource;
 @property (nonatomic, weak) _Nullable id<ObjectiveBASSDelegate> delegate;
 
+#pragma mark - FX
+
+@property (nonatomic) BOOL eqEnable;
+@property (nonatomic) float eqBassGain;
+@property (nonatomic) float eqMidGain;
+@property (nonatomic) float eqTrebleGain;
+
 #pragma mark - Currently Playing
 
 @property (nonatomic, readonly) NSURL * _Nullable currentlyPlayingURL;

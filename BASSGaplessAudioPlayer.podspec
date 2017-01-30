@@ -123,7 +123,6 @@ Pod::Spec.new do |s|
   # s.library   = "iconv"
   s.ios.vendored_library = "BASS Audio Test/libbass.a", "BASS Audio Test/libbassmix.a", "BASS Audio Test/libbass_fx.a"
 
-
   # ――― Project Settings ――――――――――――――――――――――――――――――――――――――――――――――――――――――――― #
   #
   #  If your library depends on compiler flags you can set them in the xcconfig hash
@@ -132,7 +131,7 @@ Pod::Spec.new do |s|
 
   # s.requires_arc = true
 
-  # s.xcconfig = { "HEADER_SEARCH_PATHS" => "$(SDKROOT)/usr/include/libxml2" }
+  s.xcconfig = { "OTHER_LDFLAGS" => "$(inherited) -lstdc++" }
   # s.dependency "JSONKit", "~> 1.4"
 
 end

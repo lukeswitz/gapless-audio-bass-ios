@@ -271,8 +271,12 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         // we'll manage ourselves, thanks.
         BASS_SetConfig(BASS_CONFIG_IOS_NOCATEGORY, 1);
         
-        assert(BASS_PluginLoad(&BASSFXplugin, 0));
         assert(BASS_Init(-1, 44100, 0, NULL, NULL));
+        
+        if (HIWORD(BASS_FX_GetVersion()) != BASSVERSION) {
+            // incorrect version loaded!
+            assert(false); // wat
+        }
         
         mixerMaster = BASS_Mixer_StreamCreate(44100, 2, BASS_MIXER_END);
         
@@ -283,9 +287,15 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         
         activeStreamIdx = 0;
         
-        [self setupFX];
+        self.eqEnable = YES;
     });
 }
+
+- (void)teardownBASS {
+    BASS_Free();
+}
+
+#pragma mark - FX
 
 /*
  first filter: type = BASS_BFX_BQF_LOWSHELF, fQ = 1.0, fCenter = 125
@@ -301,8 +311,12 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     fxBandPass  = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 1);
     fxHighShelf = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 2);
     
+    assert(fxLowShelf);
+    assert(fxBandPass);
+    assert(fxHighShelf);
+    
     fxParamsLowShelf.lFilter = BASS_BFX_BQF_LOWPASS;
-    fxParamsLowShelf.fQ = 1.0;
+    fxParamsLowShelf.fS = 1.0;
     fxParamsLowShelf.fCenter = 125;
     
     fxParamsBandPass.lFilter = BASS_BFX_BQF_BANDPASS;
@@ -310,12 +324,12 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     fxParamsBandPass.fCenter = 750;
     
     fxParamsHighShelf.lFilter = BASS_BFX_BQF_HIGHSHELF;
-    fxParamsHighShelf.fQ = 1.0;
+    fxParamsHighShelf.fS = 1.0;
     fxParamsHighShelf.fCenter = 5000;
     
-    BASS_FXSetParameters(fxLowShelf, &fxParamsLowShelf);
-    BASS_FXSetParameters(fxBandPass, &fxParamsBandPass);
-    BASS_FXSetParameters(fxHighShelf, &fxParamsHighShelf);
+    assert(BASS_FXSetParameters(fxLowShelf, &fxParamsLowShelf));
+    assert(BASS_FXSetParameters(fxBandPass, &fxParamsBandPass));
+    assert(BASS_FXSetParameters(fxHighShelf, &fxParamsHighShelf));
 }
 
 - (void)teardownFX {
@@ -328,9 +342,54 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     fxHighShelf = 0;
 }
 
-- (void)teardownBASS {
-    BASS_Free();
+- (void)setEqEnable:(BOOL)eqEnable {
+    if(_eqEnable != eqEnable) {
+        _eqEnable = eqEnable;
+        
+        if(_eqEnable) {
+            [self setupFX];
+        }
+        else {
+            [self teardownFX];
+        }
+    }
 }
+
+- (float)setGain:(float)gain
+       inParams:(BASS_BFX_BQF *)params
+          forFX:(HFX)fx {
+    params->fGain = fminf(fmaxf(-12.0, gain), 12.0);
+    
+    BASS_FXSetParameters(fx, params);
+    
+    return params->fGain;
+}
+
+- (void)setEqBassGain:(float)eqBassGain {
+    [self setGain:eqBassGain inParams:&fxParamsLowShelf forFX:fxLowShelf];
+}
+
+- (void)setEqMidGain:(float)eqMidGain {
+    [self setGain:eqMidGain inParams:&fxParamsBandPass forFX:fxBandPass];
+}
+
+- (void)setEqTrebleGain:(float)eqTrebleGain {
+    [self setGain:eqTrebleGain inParams:&fxParamsHighShelf forFX:fxHighShelf];
+}
+
+- (float)eqBassGain {
+    return fxParamsLowShelf.fGain;
+}
+
+- (float)eqMidGain {
+    return fxParamsBandPass.fGain;
+}
+
+- (float)eqTrebleGain {
+    return fxParamsHighShelf.fGain;
+}
+
+#pragma mark - URL Building
 
 - (HSTREAM)buildStreamForURL:(NSURL *)url
               withFileOffset:(DWORD)fileOffset
