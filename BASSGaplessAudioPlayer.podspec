@@ -91,7 +91,7 @@ Pod::Spec.new do |s|
   #  Not including the public_header_files will make all headers public.
   #
 
-  s.source_files  = "BASS Audio Test/ObjectiveBASS.{h,m}", "BASS Audio Test/bass.h", "BASS Audio Test/bassmix.h"
+  s.source_files  = "BASS Audio Test/ObjectiveBASS.{h,m}", "BASS Audio Test/bass.h", "BASS Audio Test/bassmix.h", "BASS Audio Test/bass_fx.h"
   # s.exclude_files = "Classes/Exclude"
 
   # s.public_header_files = "Classes/**/*.h"
@@ -121,7 +121,7 @@ Pod::Spec.new do |s|
   s.frameworks = "AVFoundation", "Accelerate", "CFNetwork", "SystemConfiguration", "AudioToolbox"
 
   # s.library   = "iconv"
-  s.ios.vendored_library = "BASS Audio Test/libbass.a", "BASS Audio Test/libbassmix.a"
+  s.ios.vendored_library = "BASS Audio Test/libbass.a", "BASS Audio Test/libbassmix.a", "BASS Audio Test/libbass_fx.a"
 
 
   # ――― Project Settings ――――――――――――――――――――――――――――――――――――――――――――――――――――――――― #

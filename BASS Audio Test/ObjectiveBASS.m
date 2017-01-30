@@ -10,6 +10,10 @@
 
 #import <AVFoundation/AVFoundation.h>
 
+#import "bass_fx.h"
+
+extern void BASSFXplugin;
+
 #define dbug NSLog
 
 #define VISUALIZATION_BUF_SIZE 4096
@@ -46,7 +50,7 @@
     _fileOffset = 0;
     _channelOffset = 0;
     
-    _url =
+    _url = nil;
     _identifier = nil;
 }
 
@@ -72,6 +76,14 @@
     float *visualizationBuf[VISUALIZATION_BUF_SIZE];
     
     BOOL seeking;
+    
+    HFX fxLowShelf;
+    HFX fxBandPass;
+    HFX fxHighShelf;
+    
+    BASS_BFX_BQF fxParamsLowShelf;
+    BASS_BFX_BQF fxParamsBandPass;
+    BASS_BFX_BQF fxParamsHighShelf;
 }
 
 @property (nonatomic) ObjectiveBassStream *activeStream;
@@ -259,7 +271,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         // we'll manage ourselves, thanks.
         BASS_SetConfig(BASS_CONFIG_IOS_NOCATEGORY, 1);
         
-        BASS_Init(-1, 44100, 0, NULL, NULL);
+        assert(BASS_PluginLoad(&BASSFXplugin, 0));
+        assert(BASS_Init(-1, 44100, 0, NULL, NULL));
         
         mixerMaster = BASS_Mixer_StreamCreate(44100, 2, BASS_MIXER_END);
         
@@ -269,7 +282,50 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         streams[1] = ObjectiveBassStream.new;
         
         activeStreamIdx = 0;
+        
+        [self setupFX];
     });
+}
+
+/*
+ first filter: type = BASS_BFX_BQF_LOWSHELF, fQ = 1.0, fCenter = 125
+ second filter: type = BASS_BFX_BQF_BANDPASS, fQ = 0.1, fCenter = 750
+ third filter: type = BASS_BFX_BQF_HIGHSHELF, fQ = 1.0, fCenter = 5000
+ then the iOS control for bass/mid/treble should correlate to changing fGain
+ we may also want to apply a master gain on the output when extreme gains are used, in order to stop people from blowing up their headphones on the output - if iOS doesn’t already do that for us
+ OH for the low shelf and high shelf you use fS = 0.0
+ not fQ
+ */
+- (void)setupFX {
+    fxLowShelf  = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 0);
+    fxBandPass  = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 1);
+    fxHighShelf = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 2);
+    
+    fxParamsLowShelf.lFilter = BASS_BFX_BQF_LOWPASS;
+    fxParamsLowShelf.fQ = 1.0;
+    fxParamsLowShelf.fCenter = 125;
+    
+    fxParamsBandPass.lFilter = BASS_BFX_BQF_BANDPASS;
+    fxParamsBandPass.fQ = 0.1;
+    fxParamsBandPass.fCenter = 750;
+    
+    fxParamsHighShelf.lFilter = BASS_BFX_BQF_HIGHSHELF;
+    fxParamsHighShelf.fQ = 1.0;
+    fxParamsHighShelf.fCenter = 5000;
+    
+    BASS_FXSetParameters(fxLowShelf, &fxParamsLowShelf);
+    BASS_FXSetParameters(fxBandPass, &fxParamsBandPass);
+    BASS_FXSetParameters(fxHighShelf, &fxParamsHighShelf);
+}
+
+- (void)teardownFX {
+    BASS_ChannelRemoveFX(mixerMaster, fxLowShelf);
+    BASS_ChannelRemoveFX(mixerMaster, fxBandPass);
+    BASS_ChannelRemoveFX(mixerMaster, fxHighShelf);
+    
+    fxLowShelf =
+    fxBandPass =
+    fxHighShelf = 0;
 }
 
 - (void)teardownBASS {
@@ -356,7 +412,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     self.activeStream.fileOffset = offset;
     self.activeStream.channelOffset = channelOffset;
     
-    return self.activeStream;
+    return self.activeStream.stream;
 }
 
 - (ObjectiveBassStream *)buildAndSetupInactiveStreamForURL:(NSURL *)url
@@ -556,7 +612,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)mixInNextTrack:(HSTREAM)completedTrack {
     dbug(@"[bass][MixerEndSyncProc] End Sync called for stream: %u", completedTrack);
     
-    if(completedTrack != self.activeStream && completedTrack != mixerMaster) {
+    if(completedTrack != self.activeStream.stream && completedTrack != mixerMaster) {
         dbug(@"[bass][MixerEndSyncProc] completed stream is no longer active: %u", completedTrack);
         return;
     }
@@ -612,6 +668,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                  withURL:previouslyActiveURL];
 }
 
+/*
 - (void)printStatus {
     [self printStatus:activeStreamIdx withTrackIndex:self.currentlyPlayingIdentifier];
     [self printStatus:activeStreamIdx == 0 ? 1 : 0 withTrackIndex:self.nextIdentifier];
@@ -631,6 +688,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     
     dbug(@"[Stream: %lu %u, identifier: %lu] Connected: %llu. Download: %.3f%%. Playback: %.3f%%.\n", (unsigned long)streamIdx, streams[streamIdx], (long)idx, connected, downloadPct, playPct);
 }
+ */
 
 #pragma mark - Properties
 
@@ -746,7 +804,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     if(seekingBeforeStartOfThisRequest || seekingBeyondDownloaded) {
         DWORD fileOffset = (DWORD)floor(pct * totalFileBytes);
 
-        dbug(@"[bass][stream %lu] Seek %% (%f/%llu) is greater than downloaded %% (%f/%lu) OR seek channel byte (%llu) < start channel offset (%llu). Opening new stream.", (unsigned long)activeStreamIdx, pct, fileOffset, downloadedPct, downloadedBytes, seekTo, self.activeStream.channelOffset);
+        dbug(@"[bass][stream %lu] Seek %% (%f/%u) is greater than downloaded %% (%f/%llu) OR seek channel byte (%llu) < start channel offset (%llu). Opening new stream.", (unsigned long)activeStreamIdx, pct, fileOffset, downloadedPct, downloadedBytes, seekTo, self.activeStream.channelOffset);
         
         HSTREAM oldActiveStream = self.activeStream.stream;
         

@@ -21,12 +21,14 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        /*
         bass = ObjectiveBASS()
         
         bass?.delegate = self
         bass?.dataSource = self
         
         bass?.play(URL(string: urls[idx])!, withIdentifier: 100)
+ */
     }
     
     func stringFromTimeInterval(_ interval: TimeInterval) -> String {
@@ -53,6 +55,7 @@ class ViewController: UIViewController {
     }
 }
 
+/*
 extension ViewController : ObjectiveBASSDelegate {
     func bassDownloadProgressChanged(_ forActiveTrack: Bool, downloadedBytes: UInt64, totalBytes: UInt64) {
         uiProgressDownload.progress = Float(downloadedBytes) / Float(totalBytes);
@@ -107,4 +110,4 @@ extension ViewController : ObjectiveBASSDataSource {
         bass.nextTrackURLLoaded(URL(string: urls[identifierToIdx(identifier)])!)
     }
 }
-
+*/

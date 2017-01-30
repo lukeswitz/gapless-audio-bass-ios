@@ -20,6 +20,7 @@
 		7CD47AF91DB9165C00E60060 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AF81DB9165C00E60060 /* SystemConfiguration.framework */; };
 		7CD47AFB1DB9166200E60060 /* CFNetwork.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AFA1DB9166200E60060 /* CFNetwork.framework */; };
 		7CD47AFD1DB9166B00E60060 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD47AFC1DB9166B00E60060 /* Accelerate.framework */; };
+		7CD645461E3E575000D7FEC2 /* libbass_fx.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD645451E3E575000D7FEC2 /* libbass_fx.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +44,8 @@
 		7CD47AF81DB9165C00E60060 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		7CD47AFA1DB9166200E60060 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
 		7CD47AFC1DB9166B00E60060 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		7CD645441E3E575000D7FEC2 /* bass_fx.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bass_fx.h; sourceTree = "<group>"; };
+		7CD645451E3E575000D7FEC2 /* libbass_fx.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libbass_fx.a; sourceTree = "<group>"; };
 		9909448ACC3058F2834909F2 /* Pods_BASS_Audio_Test.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_BASS_Audio_Test.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB3C62FD9498DB0503BB2259 /* Pods-BASS Audio Test.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BASS Audio Test.release.xcconfig"; path = "Pods/Target Support Files/Pods-BASS Audio Test/Pods-BASS Audio Test.release.xcconfig"; sourceTree = "<group>"; };
 		E3D86011BB8FD355C8F3F945 /* Pods-BASS Audio Test.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BASS Audio Test.debug.xcconfig"; path = "Pods/Target Support Files/Pods-BASS Audio Test/Pods-BASS Audio Test.debug.xcconfig"; sourceTree = "<group>"; };
@@ -53,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7CD645461E3E575000D7FEC2 /* libbass_fx.a in Frameworks */,
 				7C774D411E02371000DF435E /* AVFoundation.framework in Frameworks */,
 				7CD47AFD1DB9166B00E60060 /* Accelerate.framework in Frameworks */,
 				7CD47AFB1DB9166200E60060 /* CFNetwork.framework in Frameworks */,
@@ -123,8 +127,10 @@
 			children = (
 				7CD47AF21DB90F0300E60060 /* bass.h */,
 				7CD47AF11DB90EFA00E60060 /* bassmix.h */,
+				7CD645441E3E575000D7FEC2 /* bass_fx.h */,
 				7CD47AE91DB90E2300E60060 /* libbassmix.a */,
 				7CD47AEA1DB90E2300E60060 /* libbass.a */,
+				7CD645451E3E575000D7FEC2 /* libbass_fx.a */,
 			);
 			name = BASS;
 			sourceTree = "<group>";
@@ -356,7 +362,9 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"$(PROJECT_DIR)/BASS Audio Test\"",
+					"$(PROJECT_DIR)/BASS\\ Audio\\ Test",
 				);
+				OTHER_LDFLAGS = "-lstdc++";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.alecgorge.BASS-Audio-Test";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "BASS Audio Test/BASS Audio Test-Bridging-Header.h";
@@ -376,7 +384,9 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"$(PROJECT_DIR)/BASS Audio Test\"",
+					"$(PROJECT_DIR)/BASS\\ Audio\\ Test",
 				);
+				OTHER_LDFLAGS = "-lstdc++";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.alecgorge.BASS-Audio-Test";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "BASS Audio Test/BASS Audio Test-Bridging-Header.h";
