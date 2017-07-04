@@ -316,7 +316,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     assert(fxHighShelf);
     
     fxParamsLowShelf.lFilter = BASS_BFX_BQF_LOWSHELF;
-    fxParamsLowShelf.fS = 0.1;
+    fxParamsLowShelf.fS = 1.0;
     fxParamsLowShelf.fCenter = 125;
     
     fxParamsBandPass.lFilter = BASS_BFX_BQF_BANDPASS;
@@ -324,7 +324,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     fxParamsBandPass.fCenter = 750;
     
     fxParamsHighShelf.lFilter = BASS_BFX_BQF_HIGHSHELF;
-    fxParamsHighShelf.fS = 0.1;
+    fxParamsHighShelf.fS = 1.0;
     fxParamsHighShelf.fCenter = 5000;
     
     assert(BASS_FXSetParameters(fxLowShelf, &fxParamsLowShelf));
@@ -543,6 +543,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             assert(BASS_ChannelPlay(mixerMaster, FALSE));
             
             [self changeCurrentState:BassPlaybackStatePlaying];
+            
+            [self nextTrackMayHaveChanged];
         }
     });
     
@@ -552,6 +554,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)startUpdates {
     NSTimeInterval oldElapsed = self.elapsed;
     NSTimeInterval oldDuration = self.currentDuration;
+    BassPlaybackState prevState = _currentState;
 
     QWORD oldDownloadedBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_DOWNLOAD);
     QWORD oldTotalFileBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_SIZE);
@@ -563,19 +566,40 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         QWORD downloadedBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_DOWNLOAD);
         QWORD totalFileBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_SIZE);
         
+        BOOL sendPlaybackChanged = NO;
+        BOOL sendDownloadChanged = NO;
+        BOOL sendStateChanged    = NO;
+        
         if(oldElapsed != elapsed || oldDuration != duration) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self.delegate BASSPlaybackProgressChanged:elapsed
-                                         withTotalDuration:duration];
-            });
+            sendPlaybackChanged = YES;
         }
         
         if((downloadedBytes != -1 || totalFileBytes != -1 || oldTotalFileBytes != -1 || oldTotalFileBytes != -1)
         && (oldDownloadedBytes != downloadedBytes || oldTotalFileBytes != totalFileBytes)) {
+            sendDownloadChanged = YES;
+        }
+        
+        BassPlaybackState currState = self.currentState;
+        if(prevState != currState) {
+            sendStateChanged = YES;
+        }
+        
+        if(sendStateChanged || sendDownloadChanged || sendPlaybackChanged) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self.delegate BASSDownloadProgressChanged:YES
-                                           downloadedBytes:downloadedBytes
-                                                totalBytes:totalFileBytes];
+                if(sendPlaybackChanged) {
+                    [self.delegate BASSPlaybackProgressChanged:elapsed
+                                             withTotalDuration:duration];
+                }
+                
+                if(sendDownloadChanged) {
+                    [self.delegate BASSDownloadProgressChanged:YES
+                                               downloadedBytes:downloadedBytes
+                                                    totalBytes:totalFileBytes];
+                }
+                
+                if(sendStateChanged) {
+                    [self.delegate BASSDownloadPlaybackStateChanged:currState];
+                }
             });
         }
         
@@ -628,7 +652,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         // assert(BASS_ChannelUpdate(self.inactiveStream, 0));
     }
     else {
-        assert(FALSE);
+        dbug(@"[bass][ERROR] whoa, unknown stream finished downloading: %u", stream);
+        // assert(FALSE);
     }
 }
 
