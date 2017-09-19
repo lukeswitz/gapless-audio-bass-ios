@@ -154,6 +154,11 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)nextTrackChanged {
+    // don't do anything if we aren't currently playing something
+    if(self.currentlyPlayingIdentifier == nil) {
+        return;
+    }
+
     if ([self.dataSource BASSIsPlayingLastTrack:self
                                         withURL:self.currentlyPlayingURL
                                   andIdentifier:self.currentlyPlayingIdentifier]) {
