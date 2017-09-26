@@ -984,6 +984,11 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                                selector:@selector(handleMediaServicesWereReset:)
                                                    name:AVAudioSessionMediaServicesWereResetNotification
                                                  object:session];
+        
+        if([self.delegate respondsToSelector:@selector(BASSAudioSessionSetUp)]) {
+            [self.delegate BASSAudioSessionSetUp];
+        }
+        
         audioSessionAlreadySetUp = YES;
     }
 }
