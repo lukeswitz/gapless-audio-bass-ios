@@ -520,8 +520,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         return;
     }
     
-    [self setupAudioSession];
-
+    [self setupAudioSession: YES];
+    
     dispatch_async(queue, ^{
         // stop playback
         assert(BASS_ChannelStop(mixerMaster));
@@ -831,6 +831,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)next {
+    [self ensureHasAudioSession];
+
     dispatch_async(queue, ^{
         if(isInactiveStreamUsed) {
             [self mixInNextTrack:self.activeStream.stream];
@@ -847,7 +849,17 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     });
 }
 
+- (void)ensureHasAudioSession {
+    if(AVAudioSession.sharedInstance.isOtherAudioPlaying) {
+        // needed to handle weird car bluetooth scenarios
+        audioSessionAlreadySetUp = NO;
+        [self setupAudioSession: NO];
+    }
+}
+
 - (void)resume {
+    [self ensureHasAudioSession];
+    
     dispatch_async(queue, ^{
         // no assert because it could fail if already playing
         if(BASS_ChannelPlay(mixerMaster, NO)) {
@@ -960,7 +972,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 #pragma mark - Audio Session Routing/Interruption Handling
 
-- (void)setupAudioSession {
+- (void)setupAudioSession:(BOOL)addObservers {
     if(!audioSessionAlreadySetUp) {
         AVAudioSession *session = AVAudioSession.sharedInstance;
         
@@ -972,18 +984,20 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                      error:nil];
         
         // Register for Route Change notifications
-        [NSNotificationCenter.defaultCenter addObserver:self
-                                               selector:@selector(handleRouteChange:)
-                                                   name:AVAudioSessionRouteChangeNotification
-                                                 object:session];
-        [NSNotificationCenter.defaultCenter addObserver:self
-                                               selector:@selector(handleInterruption:)
-                                                   name:AVAudioSessionInterruptionNotification
-                                                 object:session];
-        [NSNotificationCenter.defaultCenter addObserver:self
-                                               selector:@selector(handleMediaServicesWereReset:)
-                                                   name:AVAudioSessionMediaServicesWereResetNotification
-                                                 object:session];
+        if(addObservers) {
+            [NSNotificationCenter.defaultCenter addObserver:self
+                                                   selector:@selector(handleRouteChange:)
+                                                       name:AVAudioSessionRouteChangeNotification
+                                                     object:session];
+            [NSNotificationCenter.defaultCenter addObserver:self
+                                                   selector:@selector(handleInterruption:)
+                                                       name:AVAudioSessionInterruptionNotification
+                                                     object:session];
+            [NSNotificationCenter.defaultCenter addObserver:self
+                                                   selector:@selector(handleMediaServicesWereReset:)
+                                                       name:AVAudioSessionMediaServicesWereResetNotification
+                                                     object:session];
+        }
         
         if([self.delegate respondsToSelector:@selector(BASSAudioSessionSetUp)]) {
             [self.delegate BASSAudioSessionSetUp];
