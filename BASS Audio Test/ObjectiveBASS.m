@@ -195,9 +195,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     
     self.inactiveStream.url = url;
     
-    if(self.activeStream.preloadFinished) {
+    if(self.activeStream.preloadFinished || self.activeStream.url.isFileURL) {
         dbug(@"[bass][stream] active stream preload complete, preloading next");
         [self setupInactiveStreamWithNext];
+        
+        // this is needed because the stream download events don't fire for local music
+        if(self.activeStream.url.isFileURL) {
+            [self streamDownloadComplete:self.activeStream.stream];
+        }
     }
     else {
         dbug(@"[bass][stream] active stream preload NOT complete, NOT preloading next");
