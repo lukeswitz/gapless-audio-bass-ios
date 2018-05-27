@@ -448,7 +448,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                StreamStallSyncProc,
                                (__bridge void *)(self)));
     
-    dbug(@"[bass][stream] created new stream: %u", newStream);
+    dbug(@"[bass][stream] created new stream: %u. Callstack:\n%@", newStream, NSThread.callStackSymbols);
     
     return newStream;
 }
@@ -465,6 +465,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                             withIdentifier:(NSUUID *)ident
                                 fileOffset:(DWORD)offset
                           andChannelOffset:(QWORD)channelOffset {
+    dbug(@"[bass][stream] requesting build stream for ACTIVE");
     HSTREAM newStream = [self buildStreamForURL:url
                                  withFileOffset:offset
                                   andIdentifier:ident];
@@ -486,6 +487,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (ObjectiveBassStream *)buildAndSetupInactiveStreamForURL:(NSURL *)url
                                             withIdentifier:(NSUUID *)ident {
+    dbug(@"[bass][stream] requesting build stream for INACTIVE");
     HSTREAM newStream = [self buildStreamForURL:url withFileOffset:0 andIdentifier:ident];
     
     if(newStream == 0) {
@@ -515,7 +517,9 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)playURL:(nonnull NSURL *)url
  withIdentifier:(nonnull NSUUID *)identifier
      startingAt:(float)pct {
-    if(self.currentlyPlayingURL != nil && self.hasNextURL && [identifier isEqual:self.nextIdentifier]) {
+    [self setupAudioSession: YES];
+
+    if(self.currentlyPlayingURL != nil && self.hasNextURL && [identifier isEqual:self.nextIdentifier] && isInactiveStreamUsed) {
         [self next];
         return;
     }
@@ -524,8 +528,6 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         
         return;
     }
-    
-    [self setupAudioSession: YES];
     
     dispatch_async(queue, ^{
         // stop playback
@@ -550,7 +552,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             assert(BASS_Mixer_StreamAddChannel(mixerMaster,
                                                self.activeStream.stream,
                                                BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
-            assert(BASS_ChannelPlay(mixerMaster, FALSE));
+            assert(BASS_ChannelPlay(mixerMaster, TRUE));
             
             [self changeCurrentState:BassPlaybackStatePlaying];
             
@@ -857,7 +859,6 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)ensureHasAudioSession {
     if(AVAudioSession.sharedInstance.isOtherAudioPlaying) {
         // needed to handle weird car bluetooth scenarios
-        audioSessionAlreadySetUp = NO;
         [self setupAudioSession: NO];
     }
 }
@@ -978,16 +979,16 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 #pragma mark - Audio Session Routing/Interruption Handling
 
 - (void)setupAudioSession:(BOOL)addObservers {
+    AVAudioSession *session = AVAudioSession.sharedInstance;
+    
+    [session setCategory:AVAudioSessionCategoryPlayback
+             withOptions:AVAudioSessionCategoryOptionAllowAirPlay | AVAudioSessionCategoryOptionAllowBluetooth
+                   error:nil];
+    
+    [session setActive:YES
+                 error:nil];
+    
     if(!audioSessionAlreadySetUp) {
-        AVAudioSession *session = AVAudioSession.sharedInstance;
-        
-        [session setCategory:AVAudioSessionCategoryPlayback
-                 withOptions:AVAudioSessionCategoryOptionAllowAirPlay | AVAudioSessionCategoryOptionAllowBluetooth
-                       error:nil];
-        
-        [session setActive:YES
-                     error:nil];
-        
         // Register for Route Change notifications
         if(addObservers) {
             [NSNotificationCenter.defaultCenter addObserver:self
