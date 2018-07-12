@@ -121,6 +121,8 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
 - (void)next;
 - (void)stop;
 
+- (void)prepareAudioSession;
+
 - (void)playURL:(nonnull NSURL *)url
  withIdentifier:(nonnull NSUUID *)identifier;
 

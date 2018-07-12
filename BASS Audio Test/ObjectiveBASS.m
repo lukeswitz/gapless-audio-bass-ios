@@ -71,6 +71,7 @@ extern void BASSFXplugin;
     BassPlaybackState _currentState;
     
     BOOL audioSessionAlreadySetUp;
+    BOOL audioSessionObserversSetUp;
     BOOL wasPlayingWhenInterrupted;
     
     float *visualizationBuf[VISUALIZATION_BUF_SIZE];
@@ -143,7 +144,6 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 @implementation ObjectiveBASS
-
 - (void)stopAndResetInactiveStream {
     // no assert because this might fail
     BASS_ChannelStop(self.inactiveStream.stream);
@@ -840,7 +840,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)next {
-    [self ensureHasAudioSession];
+    [self prepareAudioSession];
 
     dispatch_async(queue, ^{
         if(isInactiveStreamUsed) {
@@ -858,15 +858,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     });
 }
 
-- (void)ensureHasAudioSession {
-    if(AVAudioSession.sharedInstance.isOtherAudioPlaying) {
-        // needed to handle weird car bluetooth scenarios
-        [self setupAudioSession: NO];
-    }
+- (void)prepareAudioSession {
+    // needed to handle weird car bluetooth scenarios
+    BOOL shouldActivate = !(AVAudioSession.sharedInstance.secondaryAudioShouldBeSilencedHint);
+    [self setupAudioSession:shouldActivate];
 }
 
 - (void)resume {
-    [self ensureHasAudioSession];
+    [self prepareAudioSession];
     
     dispatch_async(queue, ^{
         // no assert because it could fail if already playing
@@ -983,39 +982,43 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 #pragma mark - Audio Session Routing/Interruption Handling
 
-- (void)setupAudioSession:(BOOL)addObservers {
+- (void)setupAudioSession:(BOOL)makeActive {
     AVAudioSession *session = AVAudioSession.sharedInstance;
     
     [session setCategory:AVAudioSessionCategoryPlayback
              withOptions:AVAudioSessionCategoryOptionAllowAirPlay | AVAudioSessionCategoryOptionAllowBluetooth
                    error:nil];
     
-    [session setActive:YES
-                 error:nil];
+    if (makeActive) {
+        [session setActive:YES
+                     error:nil];
+    }
+    
+    // Register for Route Change notifications
+    if (makeActive && !audioSessionObserversSetUp) {
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                               selector:@selector(handleRouteChange:)
+                                                   name:AVAudioSessionRouteChangeNotification
+                                                 object:session];
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                               selector:@selector(handleInterruption:)
+                                                   name:AVAudioSessionInterruptionNotification
+                                                 object:session];
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                               selector:@selector(handleMediaServicesWereReset:)
+                                                   name:AVAudioSessionMediaServicesWereResetNotification
+                                                 object:session];
+        audioSessionObserversSetUp = YES;
+    }
     
     if(!audioSessionAlreadySetUp) {
-        // Register for Route Change notifications
-        if(addObservers) {
-            [NSNotificationCenter.defaultCenter addObserver:self
-                                                   selector:@selector(handleRouteChange:)
-                                                       name:AVAudioSessionRouteChangeNotification
-                                                     object:session];
-            [NSNotificationCenter.defaultCenter addObserver:self
-                                                   selector:@selector(handleInterruption:)
-                                                       name:AVAudioSessionInterruptionNotification
-                                                     object:session];
-            [NSNotificationCenter.defaultCenter addObserver:self
-                                                   selector:@selector(handleMediaServicesWereReset:)
-                                                       name:AVAudioSessionMediaServicesWereResetNotification
-                                                     object:session];
-        }
-        
         if([self.delegate respondsToSelector:@selector(BASSAudioSessionSetUp)]) {
             [self.delegate BASSAudioSessionSetUp];
         }
         
         audioSessionAlreadySetUp = YES;
     }
+    
 }
 
 - (void)teardownAudioSession {
