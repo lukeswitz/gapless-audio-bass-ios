@@ -278,8 +278,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         // BASS_SetConfigPtr(BASS_CONFIG_NET_PROXY, "192.168.1.196:8888");
         BASS_SetConfig(BASS_CONFIG_NET_TIMEOUT, 15 * 1000);
         
-        // we'll manage ourselves, thanks.
-        BASS_SetConfig(BASS_CONFIG_IOS_NOCATEGORY, 1);
+        BASS_SetConfig(BASS_CONFIG_IOS_MIXAUDIO, 0);
         
         assert(BASS_Init(-1, 44100, 0, NULL, NULL));
         
@@ -555,6 +554,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             
             // the TRUE for the second argument clears the buffer so there isn't old sound playing
             assert(BASS_ChannelPlay(mixerMaster, TRUE));
+            BASS_Start();
             
             [self changeCurrentState:BassPlaybackStatePlaying];
             
@@ -852,7 +852,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)pause {
     dispatch_async(queue, ^{
         // no assert because it could fail if already paused
-        if(BASS_ChannelPause(mixerMaster)) {
+        if(BASS_Pause()) {
             [self changeCurrentState:BassPlaybackStatePaused];
         }
     });
@@ -870,7 +870,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     dispatch_async(queue, ^{
         // no assert because it could fail if already playing
         // the NO for the second argument prevents the buffer from clearing
-        if(BASS_ChannelPlay(mixerMaster, NO)) {
+        if(BASS_Start()) {
             [self changeCurrentState:BassPlaybackStatePlaying];
         }
     });
@@ -985,15 +985,6 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)setupAudioSession:(BOOL)makeActive {
     AVAudioSession *session = AVAudioSession.sharedInstance;
     
-    [session setCategory:AVAudioSessionCategoryPlayback
-             withOptions:AVAudioSessionCategoryOptionAllowAirPlay | AVAudioSessionCategoryOptionAllowBluetooth
-                   error:nil];
-    
-    if (makeActive) {
-        [session setActive:YES
-                     error:nil];
-    }
-    
     // Register for Route Change notifications
     if (makeActive && !audioSessionObserversSetUp) {
         [NSNotificationCenter.defaultCenter addObserver:self
@@ -1022,9 +1013,6 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)teardownAudioSession {
-    [AVAudioSession.sharedInstance setActive:NO
-                                       error:nil];
-    
     [NSNotificationCenter.defaultCenter removeObserver:self name:@"AVAudioSessionRouteChangeNotification" object:nil];
     [NSNotificationCenter.defaultCenter removeObserver:self name:@"AVAudioSessionInterruptionNotification" object:nil];
     [NSNotificationCenter.defaultCenter removeObserver:self name:@"AVAudioSessionMediaServicesWereResetNotification" object:nil];
