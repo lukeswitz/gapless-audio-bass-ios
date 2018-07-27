@@ -592,6 +592,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                                self.activeStream.stream,
                                                BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             
+            // Make sure BASS is started, just in case we had paused it earlier
+            BASS_Start();
             // the TRUE for the second argument clears the buffer so there isn't old sound playing
             assert(BASS_ChannelPlay(mixerMaster, TRUE));
             
@@ -913,6 +915,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     dispatch_async(queue, ^{
         [self setupBASS];
         
+        BASS_Start();
         // no assert because it could fail if already playing
         // the NO for the second argument prevents the buffer from clearing
         if(BASS_ChannelPlay(mixerMaster, NO)) {
@@ -971,6 +974,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                 andChannelOffset:seekTo] != 0) {
             assert(BASS_Mixer_StreamAddChannel(mixerMaster, self.activeStream.stream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             
+            BASS_Start();
             // the TRUE for the second argument clears the buffer to prevent bits of the old playback
             assert(BASS_ChannelPlay(mixerMaster, TRUE));
             
