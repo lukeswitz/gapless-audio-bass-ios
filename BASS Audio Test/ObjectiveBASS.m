@@ -592,6 +592,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                                self.activeStream.stream,
                                                BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             
+            // Make sure BASS is started, just in case we had paused it earlier
+            BASS_Start();
             // the TRUE for the second argument clears the buffer so there isn't old sound playing
             assert(BASS_ChannelPlay(mixerMaster, TRUE));
             
