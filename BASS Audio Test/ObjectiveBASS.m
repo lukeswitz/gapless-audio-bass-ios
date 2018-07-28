@@ -18,6 +18,8 @@ extern void BASSFXplugin;
 
 #define VISUALIZATION_BUF_SIZE 4096
 
+static const void * const objectiveBASSQueueKey = "BASSQueue";
+
 @interface ObjectiveBassStream : NSObject
 
 @property (nonatomic) BOOL preloadStarted;
@@ -59,6 +61,8 @@ extern void BASSFXplugin;
 @interface ObjectiveBASS (){
     
 @private
+    BOOL isSetup;
+    
     HSTREAM mixerMaster;
     
     ObjectiveBassStream *streams[2];
@@ -145,12 +149,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 @implementation ObjectiveBASS
 - (void)stopAndResetInactiveStream {
-    // no assert because this might fail
-    BASS_ChannelStop(self.inactiveStream.stream);
-    
-    [self.inactiveStream clear];
-    
-    isInactiveStreamUsed = NO;
+    if (isSetup) {
+        // no assert because this might fail
+        BASS_ChannelStop(self.inactiveStream.stream);
+        
+        [self.inactiveStream clear];
+        
+        isInactiveStreamUsed = NO;
+    }
 }
 
 - (void)nextTrackChanged {
@@ -263,7 +269,15 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (instancetype)init {
     if (self = [super init]) {
         queue = dispatch_queue_create("com.alecgorge.ios.objectivebass", NULL);
-        [self setupBASS];
+        dispatch_queue_set_specific(queue, objectiveBASSQueueKey, (void*)objectiveBASSQueueKey, NULL);
+        
+        streams[0] = ObjectiveBassStream.new;
+        streams[1] = ObjectiveBassStream.new;
+        
+        activeStreamIdx = 0;
+        
+        self.eqEnable = YES;
+        [self setupFXParams];
     }
     return self;
 }
@@ -273,8 +287,19 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     [self teardownAudioSession];
 }
 
+- (void)performOnBASSQueue:(void(^)())queueBlock {
+    if (dispatch_get_specific(objectiveBASSQueueKey) == objectiveBASSQueueKey) {
+        queueBlock();
+    } else {
+        dispatch_async(queue, queueBlock);
+    }
+}
+
 - (void)setupBASS {
-    dispatch_async(queue, ^{
+    void (^setupBlock)() = ^{
+        if (isSetup) return;
+        isSetup = true;
+        
         // BASS_SetConfigPtr(BASS_CONFIG_NET_PROXY, "192.168.1.196:8888");
         BASS_SetConfig(BASS_CONFIG_NET_TIMEOUT, 15 * 1000);
         
@@ -291,13 +316,10 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         
         BASS_ChannelSetSync(mixerMaster, BASS_SYNC_END | BASS_SYNC_MIXTIME, 0, MixerEndSyncProc, (__bridge void *)(self));
         
-        streams[0] = ObjectiveBassStream.new;
-        streams[1] = ObjectiveBassStream.new;
-        
-        activeStreamIdx = 0;
-        
-        self.eqEnable = YES;
-    });
+        [self toggleEQ];
+    };
+    
+    [self performOnBASSQueue:setupBlock];
 }
 
 - (void)teardownBASS {
@@ -315,15 +337,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
  OH for the low shelf and high shelf you use fS = 0.0
  not fQ
  */
-- (void)setupFX {
-    fxLowShelf  = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 0);
-    fxBandPass  = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 1);
-    fxHighShelf = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 2);
-    
-    assert(fxLowShelf);
-    assert(fxBandPass);
-    assert(fxHighShelf);
-    
+- (void)setupFXParams {
     fxParamsLowShelf.lFilter = BASS_BFX_BQF_LOWSHELF;
     fxParamsLowShelf.fS = 1.0;
     fxParamsLowShelf.fCenter = 125;
@@ -335,6 +349,16 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     fxParamsHighShelf.lFilter = BASS_BFX_BQF_HIGHSHELF;
     fxParamsHighShelf.fS = 1.0;
     fxParamsHighShelf.fCenter = 5000;
+}
+
+- (void)setupFX {
+    fxLowShelf  = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 0);
+    fxBandPass  = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 1);
+    fxHighShelf = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 2);
+    
+    assert(fxLowShelf);
+    assert(fxBandPass);
+    assert(fxHighShelf);
     
     assert(BASS_FXSetParameters(fxLowShelf, &fxParamsLowShelf));
     assert(BASS_FXSetParameters(fxBandPass, &fxParamsBandPass));
@@ -351,10 +375,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     fxHighShelf = 0;
 }
 
-- (void)setEqEnable:(BOOL)eqEnable {
-    if(_eqEnable != eqEnable) {
-        _eqEnable = eqEnable;
-        
+- (void)toggleEQ {
+    if (isSetup) {
         if(_eqEnable) {
             [self setupFX];
         }
@@ -364,12 +386,25 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     }
 }
 
+- (void)setEqEnable:(BOOL)eqEnable {
+    if(_eqEnable != eqEnable) {
+        _eqEnable = eqEnable;
+        
+        [self toggleEQ];
+    }
+}
+
 - (float)setGain:(float)gain
        inParams:(BASS_BFX_BQF *)params
           forFX:(HFX)fx {
     params->fGain = fminf(fmaxf(-12.0, gain), 12.0);
     
-    assert(BASS_FXSetParameters(fx, params));
+    // SetupBASS will call FXSetParameters, so we don't need to call it if we're not set up here
+    void (^fxBlock)() = ^{
+        if (!isSetup) return;
+        assert(BASS_FXSetParameters(fx, params));
+    };
+    [self performOnBASSQueue:fxBlock];
     
     return params->fGain;
 }
@@ -404,6 +439,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
               withFileOffset:(DWORD)fileOffset
                andIdentifier:(NSUUID *)identifier {
     HSTREAM newStream;
+    
+    [self setupBASS];
     
     if(url.isFileURL) {
         newStream = BASS_StreamCreateFile(FALSE,
@@ -529,6 +566,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     }
     
     dispatch_async(queue, ^{
+        [self setupBASS];
+        
         // stop playback
         assert(BASS_ChannelStop(mixerMaster));
         
@@ -552,6 +591,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                                self.activeStream.stream,
                                                BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             
+            // Make sure BASS is started, just in case we had paused it earlier
+            BASS_Start();
             // the TRUE for the second argument clears the buffer so there isn't old sound playing
             assert(BASS_ChannelPlay(mixerMaster, TRUE));
             BASS_Start();
@@ -843,6 +884,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     [self prepareAudioSession];
 
     dispatch_async(queue, ^{
+        [self setupBASS];
+        
         if(isInactiveStreamUsed) {
             [self mixInNextTrack:self.activeStream.stream];
         }
@@ -851,6 +894,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (void)pause {
     dispatch_async(queue, ^{
+        [self setupBASS];
+        
         // no assert because it could fail if already paused
         if(BASS_Pause()) {
             [self changeCurrentState:BassPlaybackStatePaused];
@@ -868,6 +913,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     [self prepareAudioSession];
     
     dispatch_async(queue, ^{
+        [self setupBASS];
+        
         // no assert because it could fail if already playing
         // the NO for the second argument prevents the buffer from clearing
         if(BASS_Start()) {
@@ -878,6 +925,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (void)stop {
     dispatch_async(queue, ^{
+        [self setupBASS];
+        
         if(BASS_ChannelStop(mixerMaster)) {
             [self changeCurrentState:BassPlaybackStateStopped];
         }
@@ -893,6 +942,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)_seekToPercent:(float)pct {
     // NOTE: all these calculations use the stream request offset to translate the #s into one's valid
     // for the *entire* track. we must be careful to identify situations where we need to make a new request
+    [self setupBASS];
     
     QWORD len = BASS_ChannelGetLength(self.activeStream.stream, BASS_POS_BYTE) + self.activeStream.channelOffset;
     double duration = BASS_ChannelBytes2Seconds(self.activeStream.stream, len);
@@ -936,10 +986,15 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (float)volume {
+    if (!isSetup) return 0;
+    
     return BASS_GetVolume();
 }
 
 - (void)setVolume:(float)volume {
+    // TODO: We'll lose the set volume if it happens before init. Maybe this needs to be stored in an ivar and set at SetupBASS time.
+    if (!isSetup) return;
+    
     BASS_SetVolume(volume);
 }
 
