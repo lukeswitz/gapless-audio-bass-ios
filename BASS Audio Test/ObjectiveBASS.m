@@ -100,6 +100,8 @@ static const void * const objectiveBASSQueueKey = "BASSQueue";
 - (void)streamStalled:(HSTREAM)stream;
 - (void)streamResumedAfterStall:(HSTREAM)stream;
 
+- (void)performOnBASSQueue:(void(^)())queueBlock;
+
 @end
 
 /*
@@ -118,7 +120,9 @@ void CALLBACK MixerEndSyncProc(HSYNC handle,
                                DWORD data,
                                void *user) {
     ObjectiveBASS *self = (__bridge ObjectiveBASS *)user;
-    [self mixInNextTrack:channel];
+    [self performOnBASSQueue:^{
+        [self mixInNextTrack:channel];
+    }];
 }
 
 void CALLBACK StreamDownloadCompleteSyncProc(HSYNC handle,
@@ -128,7 +132,9 @@ void CALLBACK StreamDownloadCompleteSyncProc(HSYNC handle,
     // channel is the HSTREAM we created before
     dbug(@"[bass][stream] stream download completed: handle: %u. channel: %u", handle, channel);
     ObjectiveBASS *self = (__bridge ObjectiveBASS *)user;
-    [self streamDownloadComplete:channel];
+    [self performOnBASSQueue:^{
+        [self streamDownloadComplete:channel];
+    }];
 }
 
 void CALLBACK StreamStallSyncProc(HSYNC handle,
@@ -139,12 +145,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     dbug(@"[bass][stream] stream stall: handle: %u. channel: %u", handle, channel);
     ObjectiveBASS *self = (__bridge ObjectiveBASS *)user;
     
-    if(data == 0 /* stalled */) {
-        [self streamStalled:channel];
-    }
-    else if(data == 1 /* resumed */) {
-        [self streamResumedAfterStall:channel];
-    }
+    [self performOnBASSQueue:^{
+        if(data == 0 /* stalled */) {
+            [self streamStalled:channel];
+        }
+        else if(data == 1 /* resumed */) {
+            [self streamResumedAfterStall:channel];
+        }
+    }];
 }
 
 @implementation ObjectiveBASS
@@ -674,18 +682,21 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)streamStalled:(HSTREAM)stream {
+    dispatch_assert_queue(queue);
     if(stream == self.activeStream.stream) {
         [self changeCurrentState:BassPlaybackStateStalled];
     }
 }
 
 - (void)streamResumedAfterStall:(HSTREAM)stream {
+    dispatch_assert_queue(queue);
     if(stream == self.activeStream.stream) {
         [self changeCurrentState:BassPlaybackStatePlaying];
     }
 }
 
 - (void)streamDownloadComplete:(HSTREAM)stream {
+    dispatch_assert_queue(queue);
     if(stream == self.activeStream.stream) {
         if(!self.activeStream.preloadFinished) {
             self.activeStream.preloadFinished = YES;
@@ -749,6 +760,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)mixInNextTrack:(HSTREAM)completedTrack {
+    dispatch_assert_queue(queue);
+    
     dbug(@"[bass][MixerEndSyncProc] End Sync called for stream: %u", completedTrack);
     
     if(completedTrack != self.activeStream.stream && completedTrack != mixerMaster) {
@@ -915,6 +928,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     dispatch_async(queue, ^{
         [self setupBASS];
         
+        BASS_Start();
         // no assert because it could fail if already playing
         // the NO for the second argument prevents the buffer from clearing
         if(BASS_Start()) {
@@ -973,6 +987,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                 andChannelOffset:seekTo] != 0) {
             assert(BASS_Mixer_StreamAddChannel(mixerMaster, self.activeStream.stream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             
+            BASS_Start();
             // the TRUE for the second argument clears the buffer to prevent bits of the old playback
             assert(BASS_ChannelPlay(mixerMaster, TRUE));
             
