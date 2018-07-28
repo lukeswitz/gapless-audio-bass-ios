@@ -603,7 +603,6 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             BASS_Start();
             // the TRUE for the second argument clears the buffer so there isn't old sound playing
             assert(BASS_ChannelPlay(mixerMaster, TRUE));
-            BASS_Start();
             
             [self changeCurrentState:BassPlaybackStatePlaying];
             
@@ -811,9 +810,11 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     }
     else {
         // no inactive stream. nothing to do...
-        // move into a paused state
-        BASS_ChannelPause(mixerMaster);
-        [self changeCurrentState:BassPlaybackStatePaused];
+        // we've probably hit the end of our queue. move into a stopped state
+        if(BASS_ChannelStop(mixerMaster)) {
+            BASS_Stop();
+            [self changeCurrentState:BassPlaybackStateStopped];
+        }
     }
     
     [self notifyDelegateThatTrackChanged:previouslyActiveGUID
