@@ -212,11 +212,6 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     if(self.activeStream.preloadFinished || self.activeStream.url.isFileURL) {
         dbug(@"[bass][stream] active stream preload complete, preloading next");
         [self setupInactiveStreamWithNext];
-        
-        // this is needed because the stream download events don't fire for local music
-        if(self.activeStream.url.isFileURL) {
-            [self streamDownloadComplete:self.activeStream.stream];
-        }
     }
     else {
         dbug(@"[bass][stream] active stream preload NOT complete, NOT preloading next");
@@ -492,7 +487,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                StreamStallSyncProc,
                                (__bridge void *)(self)));
     
-    dbug(@"[bass][stream] created new stream: %u. Callstack:\n%@", newStream, NSThread.callStackSymbols);
+    dbug(@"[bass][stream] created new stream: %u. Callstack:\n%@", newStream, @"*snip*" /* NSThread.callStackSymbols */);
     
     return newStream;
 }
@@ -606,7 +601,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             
             [self changeCurrentState:BassPlaybackStatePlaying];
             
-            [self nextTrackMayHaveChanged];
+            // this is needed because the stream download events don't fire for local music
+            if(self.activeStream.url.isFileURL) {
+                // this will call nextTrackChanged and setupInactiveStreamWithNext
+                [self streamDownloadComplete:self.activeStream.stream];
+            }
+            else {
+                [self nextTrackMayHaveChanged];
+            }
         }
     });
     
@@ -797,6 +799,12 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
         [self stopAndResetInactiveStream];
         
+        // this is needed because the stream download events don't fire for local music
+        if(self.activeStream.url.isFileURL) {
+            // this will call nextTrackChanged and setupInactiveStreamWithNext
+            [self streamDownloadComplete:self.activeStream.stream];
+        }
+        
         // don't set up next here, wait until current is downloaded
         // the new current might have already finished though #wifi
         //
@@ -949,6 +957,11 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)seekToPercent:(float)pct {
+    if(pct == 1.0f) {
+        [self next];
+        return;
+    }
+    
     dispatch_async(queue, ^{
         [self _seekToPercent:pct];
     });
