@@ -19,9 +19,9 @@ extern void BASSFXplugin;
 #define objbass_log_line(inst, l) do { if([inst.delegate respondsToSelector:@selector(BASSLoggedLine:)]) { [inst.delegate BASSLoggedLine:l]; } } while(0)
 #define objbass_log_assertion(inst, l) do { if([inst.delegate respondsToSelector:@selector(BASSLoggedFailedAssertion:)]) { [inst.delegate BASSLoggedFailedAssertion:l]; } } while(0)
 
-#define objbass_log(...) NSString *l = [NSString stringWithFormat:__VA_ARGS__]; NSString *ll = [NSString stringWithFormat:@"%@:%@ - %@", __FILE__, __LINE__, l]; objbass_log_line(self, ll)
+#define objbass_log(...) NSString *l = [NSString stringWithFormat:__VA_ARGS__, nil]; NSString *ll = [NSString stringWithFormat:@"%s:%d - %@", (strrchr(__FILE__, '/') ?: __FILE__ - 1) + 1, __LINE__, l, nil]; objbass_log_line(self, ll)
 
-#define bass_assert(x) do { int val = (x); if(val != 0) { NSString *l = [NSString stringWithFormat:@"%@:%@ - 🚨🚨🚨 Assertion failed - expected 0, got: %d.", __FILE__, __LINE__, BASS_ErrorGetCode()]; objbass_log_assertion(self, l); assert(val);  } } while(0)
+#define bass_assert(x) do { int val = (x); if(!val) { NSString *l = [NSString stringWithFormat:@"%s:%d - 🚨🚨🚨 Assertion failed - expected 0, got: %d.", (strrchr(__FILE__, '/') ?: __FILE__ - 1) + 1, __LINE__, BASS_ErrorGetCode(), nil]; objbass_log_assertion(self, l); assert(val);  } } while(0)
 
 #define VISUALIZATION_BUF_SIZE 4096
 
@@ -54,6 +54,10 @@ static const void * const objectiveBASSQueueKey = "BASSQueue";
 - (void)clear {
     _preloadStarted =
     _preloadFinished = NO;
+    
+    if(_stream != 0) {
+        BASS_StreamFree(_stream);
+    }
     
     _stream = 0;
     _fileOffset = 0;
@@ -832,6 +836,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         if(BASS_ChannelStop(mixerMaster)) {
             BASS_Stop();
             [self changeCurrentState:BassPlaybackStateStopped];
+            [self.activeStream clear];
         }
     }
     
