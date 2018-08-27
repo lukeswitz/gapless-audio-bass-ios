@@ -72,6 +72,11 @@ typedef NS_ENUM(NSInteger, BassStreamError) {
 
 - (void)BASSAudioSessionSetUp;
 
+@optional
+
+- (void)BASSLoggedLine:(nonnull NSString *)line;
+- (void)BASSLoggedFailedAssertion:(nonnull NSString *)line;
+
 @end
 
 @interface ObjectiveBASS : NSObject

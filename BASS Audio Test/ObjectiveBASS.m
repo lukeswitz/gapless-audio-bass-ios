@@ -16,6 +16,13 @@ extern void BASSFXplugin;
 
 #define dbug NSLog
 
+#define objbass_log_line(inst, l) do { if([inst.delegate respondsToSelector:@selector(BASSLoggedLine:)]) { [inst.delegate BASSLoggedLine:l]; } } while(0)
+#define objbass_log_assertion(inst, l) do { if([inst.delegate respondsToSelector:@selector(BASSLoggedFailedAssertion:)]) { [inst.delegate BASSLoggedFailedAssertion:l]; } } while(0)
+
+#define objbass_log(...) NSString *l = [NSString stringWithFormat:__VA_ARGS__]; NSString *ll = [NSString stringWithFormat:@"%@:%@ - %@", __FILE__, __LINE__, l]; objbass_log_line(self, ll)
+
+#define bass_assert(x) do { int val = (x); if(val != 0) { NSString *l = [NSString stringWithFormat:@"%@:%@ - 🚨🚨🚨 Assertion failed - expected 0, got: %d.", __FILE__, __LINE__, BASS_ErrorGetCode()]; objbass_log_assertion(self, l); assert(val);  } } while(0)
+
 #define VISUALIZATION_BUF_SIZE 4096
 
 static const void * const objectiveBASSQueueKey = "BASSQueue";
@@ -109,8 +116,8 @@ void CALLBACK StreamDownloadProc(const void *buffer,
                                  DWORD length,
                                  void *user) {
     if(length > 4 && strncmp(buffer, "HTTP", 4) == 0) {
-        dbug(@"[bass][StreamDownloadProc] received %u bytes.", length);
-        dbug(@"[bass][StreamDownloadProc] HTTP data: %@", [NSString stringWithCString:buffer encoding:NSUTF8StringEncoding]);
+        objbass_log(@"[bass][StreamDownloadProc] received %u bytes.", length);
+        objbass_log(@"[bass][StreamDownloadProc] HTTP data: %@", [NSString stringWithCString:buffer encoding:NSUTF8StringEncoding]);
     }
 }
 */
@@ -130,8 +137,10 @@ void CALLBACK StreamDownloadCompleteSyncProc(HSYNC handle,
                                              DWORD data,
                                              void *user) {
     // channel is the HSTREAM we created before
-    dbug(@"[bass][stream] stream download completed: handle: %u. channel: %u", handle, channel);
     ObjectiveBASS *self = (__bridge ObjectiveBASS *)user;
+
+    objbass_log(@"[bass][stream] stream download completed: handle: %u. channel: %u", handle, channel);
+
     [self performOnBASSQueue:^{
         [self streamDownloadComplete:channel];
     }];
@@ -142,9 +151,10 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                   DWORD data,
                                   void *user) {
     // channel is the HSTREAM we created before
-    dbug(@"[bass][stream] stream stall: handle: %u. channel: %u", handle, channel);
     ObjectiveBASS *self = (__bridge ObjectiveBASS *)user;
     
+    objbass_log(@"[bass][stream] stream stall: handle: %u. channel: %u", handle, channel);
+
     [self performOnBASSQueue:^{
         if(data == 0 /* stalled */) {
             [self streamStalled:channel];
@@ -210,11 +220,11 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     self.inactiveStream.url = url;
     
     if(self.activeStream.preloadFinished || self.activeStream.url.isFileURL) {
-        dbug(@"[bass][stream] active stream preload complete, preloading next");
+        objbass_log(@"[bass][stream] active stream preload complete, preloading next");
         [self setupInactiveStreamWithNext];
     }
     else {
-        dbug(@"[bass][stream] active stream preload NOT complete, NOT preloading next");
+        objbass_log(@"[bass][stream] active stream preload NOT complete, NOT preloading next");
     }
 }
 
@@ -308,11 +318,11 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         
         BASS_SetConfig(BASS_CONFIG_IOS_MIXAUDIO, 0);
         
-        assert(BASS_Init(-1, 44100, 0, NULL, NULL));
+        bass_assert(BASS_Init(-1, 44100, 0, NULL, NULL));
         
         if (HIWORD(BASS_FX_GetVersion()) != BASSVERSION) {
             // incorrect version loaded!
-            assert(false); // wat
+            bass_assert(false); // wat
         }
         
         mixerMaster = BASS_Mixer_StreamCreate(44100, 2, BASS_MIXER_END);
@@ -359,13 +369,13 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     fxBandPass  = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 1);
     fxHighShelf = BASS_ChannelSetFX(mixerMaster, BASS_FX_BFX_BQF, 2);
     
-    assert(fxLowShelf);
-    assert(fxBandPass);
-    assert(fxHighShelf);
+    bass_assert(fxLowShelf);
+    bass_assert(fxBandPass);
+    bass_assert(fxHighShelf);
     
-    assert(BASS_FXSetParameters(fxLowShelf, &fxParamsLowShelf));
-    assert(BASS_FXSetParameters(fxBandPass, &fxParamsBandPass));
-    assert(BASS_FXSetParameters(fxHighShelf, &fxParamsHighShelf));
+    bass_assert(BASS_FXSetParameters(fxLowShelf, &fxParamsLowShelf));
+    bass_assert(BASS_FXSetParameters(fxBandPass, &fxParamsBandPass));
+    bass_assert(BASS_FXSetParameters(fxHighShelf, &fxParamsHighShelf));
 }
 
 - (void)teardownFX {
@@ -405,7 +415,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     // SetupBASS will call FXSetParameters, so we don't need to call it if we're not set up here
     void (^fxBlock)() = ^{
         if (!isSetup) return;
-        assert(BASS_FXSetParameters(fx, params));
+        bass_assert(BASS_FXSetParameters(fx, params));
     };
     [self performOnBASSQueue:fxBlock];
     
@@ -464,7 +474,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     if(newStream == 0) {
         NSError *err = [self errorForErrorCode:BASS_ErrorGetCode()];
         
-        dbug(@"[bass][stream] error creating new stream: %ld %@", (long)err.code, err.localizedDescription);
+        objbass_log(@"[bass][stream] error creating new stream: %ld %@", (long)err.code, err.localizedDescription);
         
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.delegate BASSErrorStartingStream:err
@@ -475,19 +485,19 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         return 0;
     }
     
-    assert(BASS_ChannelSetSync(newStream,
+    bass_assert(BASS_ChannelSetSync(newStream,
                                BASS_SYNC_MIXTIME | BASS_SYNC_DOWNLOAD,
                                0,
                                StreamDownloadCompleteSyncProc,
                                (__bridge void *)(self)));
     
-    assert(BASS_ChannelSetSync(newStream,
+    bass_assert(BASS_ChannelSetSync(newStream,
                                BASS_SYNC_MIXTIME | BASS_SYNC_STALL,
                                0,
                                StreamStallSyncProc,
                                (__bridge void *)(self)));
     
-    dbug(@"[bass][stream] created new stream: %u. Callstack:\n%@", newStream, @"*snip*" /* NSThread.callStackSymbols */);
+    objbass_log(@"[bass][stream] created new stream: %u. Callstack:\n%@", newStream, @"*snip*" /* NSThread.callStackSymbols */);
     
     return newStream;
 }
@@ -504,7 +514,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                             withIdentifier:(NSUUID *)ident
                                 fileOffset:(DWORD)offset
                           andChannelOffset:(QWORD)channelOffset {
-    dbug(@"[bass][stream] requesting build stream for ACTIVE");
+    objbass_log(@"[bass][stream] requesting build stream for ACTIVE");
     HSTREAM newStream = [self buildStreamForURL:url
                                  withFileOffset:offset
                                   andIdentifier:ident];
@@ -526,7 +536,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (ObjectiveBassStream *)buildAndSetupInactiveStreamForURL:(NSURL *)url
                                             withIdentifier:(NSUUID *)ident {
-    dbug(@"[bass][stream] requesting build stream for INACTIVE");
+    objbass_log(@"[bass][stream] requesting build stream for INACTIVE");
     HSTREAM newStream = [self buildStreamForURL:url withFileOffset:0 andIdentifier:ident];
     
     if(newStream == 0) {
@@ -572,7 +582,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         [self setupBASS];
         
         // stop playback
-        assert(BASS_ChannelStop(mixerMaster));
+        bass_assert(BASS_ChannelStop(mixerMaster));
         
         // stop channels to allow them to be freed
         BASS_ChannelStop(self.activeStream.stream);
@@ -590,14 +600,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         
         if([self buildAndSetupActiveStreamForURL:url
                                   withIdentifier:identifier] != 0) {
-            assert(BASS_Mixer_StreamAddChannel(mixerMaster,
+            bass_assert(BASS_Mixer_StreamAddChannel(mixerMaster,
                                                self.activeStream.stream,
                                                BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             
             // Make sure BASS is started, just in case we had paused it earlier
             BASS_Start();
             // the TRUE for the second argument clears the buffer so there isn't old sound playing
-            assert(BASS_ChannelPlay(mixerMaster, TRUE));
+            bass_assert(BASS_ChannelPlay(mixerMaster, TRUE));
             
             [self changeCurrentState:BassPlaybackStatePlaying];
             
@@ -716,17 +726,17 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         // we do want to start decoding the downloaded data though
         
         // The amount of data to render, in milliseconds... 0 = default (2 x update period)
-        // assert(BASS_ChannelUpdate(self.inactiveStream, 0));
+        // bass_assert(BASS_ChannelUpdate(self.inactiveStream, 0));
     }
     else {
-        dbug(@"[bass][ERROR] whoa, unknown stream finished downloading: %u", stream);
-        // assert(FALSE);
+        objbass_log(@"[bass][ERROR] whoa, unknown stream finished downloading: %u", stream);
+        // bass_assert(FALSE);
     }
 }
 
 - (void)setupInactiveStreamWithNext {
     if(self.hasNextURL) {
-        dbug(@"[bass] Next index found. Setting up next stream.");
+        objbass_log(@"[bass] Next index found. Setting up next stream.");
         BASS_Mixer_ChannelRemove(self.inactiveStream.stream);
         
         if([self buildAndSetupInactiveStreamForURL:self.nextURL
@@ -747,7 +757,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         return;
     }
 
-    dbug(@"[bass][preloadNextTrack] Preloading next track");
+    objbass_log(@"[bass][preloadNextTrack] Preloading next track");
     BASS_ChannelUpdate(self.inactiveStream.stream, 0);
     self.inactiveStream.preloadStarted = YES;
 }
@@ -763,10 +773,10 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)mixInNextTrack:(HSTREAM)completedTrack {
     dispatch_assert_queue(queue);
     
-    dbug(@"[bass][MixerEndSyncProc] End Sync called for stream: %u", completedTrack);
+    objbass_log(@"[bass][MixerEndSyncProc] End Sync called for stream: %u", completedTrack);
     
     if(completedTrack != self.activeStream.stream && completedTrack != mixerMaster) {
-        dbug(@"[bass][MixerEndSyncProc] completed stream is no longer active: %u", completedTrack);
+        objbass_log(@"[bass][MixerEndSyncProc] completed stream is no longer active: %u", completedTrack);
         return;
     }
     
@@ -784,15 +794,15 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     }
     
     if([self hasNextURL] && !isInactiveStreamUsed) {
-        dbug(@"[bass][stream] playback of %d finished and there is a next URL but there isn't a next stream. setting up", completedTrack);
+        objbass_log(@"[bass][stream] playback of %d finished and there is a next URL but there isn't a next stream. setting up", completedTrack);
         [self setupInactiveStreamWithNext];
     }
     
     if(isInactiveStreamUsed) {
-        assert(BASS_Mixer_StreamAddChannel(mixerMaster,
+        bass_assert(BASS_Mixer_StreamAddChannel(mixerMaster,
                                            previouslyInactiveStream,
                                            BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
-        assert(BASS_ChannelSetPosition(mixerMaster, 0, BASS_POS_BYTE));
+        bass_assert(BASS_ChannelSetPosition(mixerMaster, 0, BASS_POS_BYTE));
         
         // now previousInactiveStream == self.activeStream
         [self toggleActiveStream];
@@ -833,7 +843,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 - (void)printStatus {
     [self printStatus:activeStreamIdx withTrackIndex:self.currentlyPlayingIdentifier];
     [self printStatus:activeStreamIdx == 0 ? 1 : 0 withTrackIndex:self.nextIdentifier];
-    dbug(@" ");
+    objbass_log(@" ");
 }
 
 - (void)printStatus:(NSInteger)streamIdx withTrackIndex:(NSInteger)idx {
@@ -847,7 +857,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     double downloadPct = 1.0 * downloadedBytes / totalBytes;
     double playPct = 1.0 * playedBytes / totalPlayableBytes;
     
-    dbug(@"[Stream: %lu %u, identifier: %lu] Connected: %llu. Download: %.3f%%. Playback: %.3f%%.\n", (unsigned long)streamIdx, streams[streamIdx], (long)idx, connected, downloadPct, playPct);
+    objbass_log(@"[Stream: %lu %u, identifier: %lu] Connected: %llu. Download: %.3f%%. Playback: %.3f%%.\n", (unsigned long)streamIdx, streams[streamIdx], (long)idx, connected, downloadPct, playPct);
 }
  */
 
@@ -977,7 +987,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     QWORD seekTo = BASS_ChannelSeconds2Bytes(self.activeStream.stream, duration * pct);
     double seekToDuration = BASS_ChannelBytes2Seconds(self.activeStream.stream, seekTo);
     
-    dbug(@"[bass][stream %lu] Found length in bytes to be %llu bytes/%f. Seeking to: %llu bytes/%f", (unsigned long)activeStreamIdx, len, duration, seekTo, seekToDuration);
+    objbass_log(@"[bass][stream %lu] Found length in bytes to be %llu bytes/%f. Seeking to: %llu bytes/%f", (unsigned long)activeStreamIdx, len, duration, seekTo, seekToDuration);
     
     QWORD downloadedBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_DOWNLOAD) + self.activeStream.fileOffset;
     QWORD totalFileBytes = BASS_StreamGetFilePosition(self.activeStream.stream, BASS_FILEPOS_SIZE) + self.activeStream.fileOffset;
@@ -991,7 +1001,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     if(seekingBeforeStartOfThisRequest || seekingBeyondDownloaded) {
         DWORD fileOffset = (DWORD)floor(pct * totalFileBytes);
 
-        dbug(@"[bass][stream %lu] Seek %% (%f/%u) is greater than downloaded %% (%f/%llu) OR seek channel byte (%llu) < start channel offset (%llu). Opening new stream.", (unsigned long)activeStreamIdx, pct, fileOffset, downloadedPct, downloadedBytes, seekTo, self.activeStream.channelOffset);
+        objbass_log(@"[bass][stream %lu] Seek %% (%f/%u) is greater than downloaded %% (%f/%llu) OR seek channel byte (%llu) < start channel offset (%llu). Opening new stream.", (unsigned long)activeStreamIdx, pct, fileOffset, downloadedPct, downloadedBytes, seekTo, self.activeStream.channelOffset);
         
         HSTREAM oldActiveStream = self.activeStream.stream;
         
@@ -999,18 +1009,18 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
                                   withIdentifier:self.currentlyPlayingIdentifier
                                       fileOffset:fileOffset
                                 andChannelOffset:seekTo] != 0) {
-            assert(BASS_Mixer_StreamAddChannel(mixerMaster, self.activeStream.stream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
+            bass_assert(BASS_Mixer_StreamAddChannel(mixerMaster, self.activeStream.stream, BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             
             BASS_Start();
             // the TRUE for the second argument clears the buffer to prevent bits of the old playback
-            assert(BASS_ChannelPlay(mixerMaster, TRUE));
+            bass_assert(BASS_ChannelPlay(mixerMaster, TRUE));
             
             BASS_Mixer_ChannelRemove(oldActiveStream);
             BASS_ChannelStop(oldActiveStream);
         }
     }
     else {
-        assert(BASS_ChannelSetPosition(self.activeStream.stream, seekTo - self.activeStream.channelOffset, BASS_POS_BYTE));
+        bass_assert(BASS_ChannelSetPosition(self.activeStream.stream, seekTo - self.activeStream.channelOffset, BASS_POS_BYTE));
     }
 }
 
@@ -1107,7 +1117,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     //    • No userInfo dictionary for this notification
     //      • Audio streaming objects are invalidated (zombies)
     //      • Handle this notification by fully reconfiguring audio
-    dbug(@"handleMediaServicesWereReset: %@ ",[notification name]);
+    objbass_log(@"handleMediaServicesWereReset: %@ ",[notification name]);
 }
 
 - (void)handleInterruption:(NSNotification*)notification{
@@ -1169,7 +1179,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         */
     }
     
-    dbug(@"handleInterruption: %@ reason %@", [notification name], reasonStr);
+    objbass_log(@"handleInterruption: %@ reason %@", [notification name], reasonStr);
 }
 
 -(void)handleRouteChange:(NSNotification*)notification{
@@ -1202,7 +1212,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             break;
     }
     
-    dbug(@"handlRouteChange: %@", seccReason);
+    objbass_log(@"handlRouteChange: %@", seccReason);
 }
 
 @end
