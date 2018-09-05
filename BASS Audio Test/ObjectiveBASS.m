@@ -21,7 +21,7 @@ extern void BASSFXplugin;
 
 #define objbass_log(...) NSString *l = [NSString stringWithFormat:__VA_ARGS__, nil]; NSString *ll = [NSString stringWithFormat:@"%s:%d - %@", (strrchr(__FILE__, '/') ?: __FILE__ - 1) + 1, __LINE__, l, nil]; objbass_log_line(self, ll)
 
-#define bass_assert(x) do { int val = (x); if(!val) { NSString *l = [NSString stringWithFormat:@"%s:%d - 🚨🚨🚨 Assertion failed - expected 0, got: %d.", (strrchr(__FILE__, '/') ?: __FILE__ - 1) + 1, __LINE__, BASS_ErrorGetCode(), nil]; objbass_log_assertion(self, l); assert(val);  } } while(0)
+#define bass_assert(x) do { int val = (x); if(!val) { NSString *l = [NSString stringWithFormat:@"%s:%d - 🚨🚨🚨 Assertion failed - expected 0, got: %d.", (strrchr(__FILE__, '/') ?: __FILE__ - 1) + 1, __LINE__, BASS_ErrorGetCode(), nil]; objbass_log_assertion(self, l); } } while(0)
 
 #define VISUALIZATION_BUF_SIZE 4096
 
