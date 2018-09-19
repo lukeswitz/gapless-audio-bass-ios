@@ -987,6 +987,13 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     // for the *entire* track. we must be careful to identify situations where we need to make a new request
     [self setupBASS];
     
+    if (self.activeStream.stream == 0) {
+        // The user may have tried to seek before the stream has loaded.
+        // TODO: Store the desired seek percent and apply it once the stream has loaded
+        objbass_log(@"[bass][stream %lu] Stream hasn't loaded yet. Ignoring seek to %f.", (unsigned long)activeStreamIdx, pct);
+        return;
+    }
+    
     QWORD len = BASS_ChannelGetLength(self.activeStream.stream, BASS_POS_BYTE) + self.activeStream.channelOffset;
     double duration = BASS_ChannelBytes2Seconds(self.activeStream.stream, len);
     QWORD seekTo = BASS_ChannelSeconds2Bytes(self.activeStream.stream, duration * pct);
