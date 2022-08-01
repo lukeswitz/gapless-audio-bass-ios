@@ -111,7 +111,7 @@ static const void * const objectiveBASSQueueKey = "BASSQueue";
 - (void)streamStalled:(HSTREAM)stream;
 - (void)streamResumedAfterStall:(HSTREAM)stream;
 
-- (void)performOnBASSQueue:(void(^)())queueBlock;
+- (void)performOnBASSQueue:(void(^)(void))queueBlock;
 
 @end
 
@@ -304,7 +304,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     [self teardownAudioSession];
 }
 
-- (void)performOnBASSQueue:(void(^)())queueBlock {
+- (void)performOnBASSQueue:(void(^)(void))queueBlock {
     if (dispatch_get_specific(objectiveBASSQueueKey) == objectiveBASSQueueKey) {
         queueBlock();
     } else {
@@ -313,9 +313,9 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 }
 
 - (void)setupBASS {
-    void (^setupBlock)() = ^{
-        if (isSetup) return;
-        isSetup = true;
+    void (^setupBlock)(void) = ^{
+        if (self->isSetup) return;
+        self->isSetup = true;
         
         // BASS_SetConfigPtr(BASS_CONFIG_NET_PROXY, "192.168.1.196:8888");
         BASS_SetConfig(BASS_CONFIG_NET_TIMEOUT, 15 * 1000);
@@ -329,9 +329,9 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
             bass_assert(false); // wat
         }
         
-        mixerMaster = BASS_Mixer_StreamCreate(44100, 2, BASS_MIXER_END);
+        self->mixerMaster = BASS_Mixer_StreamCreate(44100, 2, BASS_MIXER_END);
         
-        BASS_ChannelSetSync(mixerMaster, BASS_SYNC_END | BASS_SYNC_MIXTIME, 0, MixerEndSyncProc, (__bridge void *)(self));
+        BASS_ChannelSetSync(self->mixerMaster, BASS_SYNC_END | BASS_SYNC_MIXTIME, 0, MixerEndSyncProc, (__bridge void *)(self));
         
         [self toggleEQ];
     };
@@ -417,8 +417,8 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     params->fGain = fminf(fmaxf(-12.0, gain), 12.0);
     
     // SetupBASS will call FXSetParameters, so we don't need to call it if we're not set up here
-    void (^fxBlock)() = ^{
-        if (!isSetup) return;
+    void (^fxBlock)(void) = ^{
+        if (!self->isSetup) return;
         bass_assert(BASS_FXSetParameters(fx, params));
     };
     [self performOnBASSQueue:fxBlock];
@@ -586,7 +586,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         [self setupBASS];
         
         // stop playback
-        bass_assert(BASS_ChannelStop(mixerMaster));
+        bass_assert(BASS_ChannelStop(self->mixerMaster));
         
         // stop channels to allow them to be freed
         BASS_ChannelStop(self.activeStream.stream);
@@ -604,14 +604,14 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
         
         if([self buildAndSetupActiveStreamForURL:url
                                   withIdentifier:identifier] != 0) {
-            bass_assert(BASS_Mixer_StreamAddChannel(mixerMaster,
+            bass_assert(BASS_Mixer_StreamAddChannel(self->mixerMaster,
                                                self.activeStream.stream,
                                                BASS_STREAM_AUTOFREE | BASS_MIXER_NORAMPIN));
             
             // Make sure BASS is started, just in case we had paused it earlier
             BASS_Start();
             // the TRUE for the second argument clears the buffer so there isn't old sound playing
-            bass_assert(BASS_ChannelPlay(mixerMaster, TRUE));
+            bass_assert(BASS_ChannelPlay(self->mixerMaster, TRUE));
             
             [self changeCurrentState:BassPlaybackStatePlaying];
             
@@ -892,7 +892,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
 
 - (void)changeCurrentState:(BassPlaybackState)state {
     dispatch_async(dispatch_get_main_queue(), ^{
-        _currentState = state;
+        self->_currentState = state;
         [self.delegate BASSDownloadPlaybackStateChanged:state];
     });
 }
@@ -923,7 +923,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     dispatch_async(queue, ^{
         [self setupBASS];
         
-        if(isInactiveStreamUsed) {
+        if(self->isInactiveStreamUsed) {
             [self mixInNextTrack:self.activeStream.stream];
         }
     });
@@ -965,7 +965,7 @@ void CALLBACK StreamStallSyncProc(HSYNC handle,
     dispatch_async(queue, ^{
         [self setupBASS];
         
-        if(BASS_ChannelStop(mixerMaster)) {
+        if(BASS_ChannelStop(self->mixerMaster)) {
             [self changeCurrentState:BassPlaybackStateStopped];
         }
     });
